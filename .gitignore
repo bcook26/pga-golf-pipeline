@@ -1,0 +1,20 @@
+# Virtual Environment
+venv/
+
+# Local Environment Variables
+.env
+
+# cache files
+__pycache__/
+
+# VS Code settings 
+.vscode/
+
+# Test output
+app/routers/current_weather_output.json
+
+#DB config
+database.ini
+
+# Notes
+notes.txt
