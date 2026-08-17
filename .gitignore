@@ -18,3 +18,6 @@ database.ini
 
 # Notes
 notes.txt
+
+#  Local csv files
+*.csv

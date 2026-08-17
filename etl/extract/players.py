@@ -3,8 +3,8 @@ import json
 from bs4 import BeautifulSoup
 import pandas as pd
 from pprint import pprint
-from config import TOUR_MAPPING, PLAYER_DROP_COLS
-from helper import clean_string_column
+from .config import TOUR_MAPPING, PLAYER_DROP_COLS
+from .helper import clean_string_column
 
 URL = "https://www.pgatour.com/players"
 
@@ -42,7 +42,7 @@ def extract_players():
 
         if "playerDirectory" in str(query["queryKey"]):
 
-            return query["state"]["data"]
+            return pd.DataFrame(query["state"]["data"]["players"])
 
 
     return None
@@ -58,10 +58,19 @@ def player_transformation(df: pd.DataFrame) -> pd.DataFrame:
     )
 
     # Clean text columns
-    df = clean_string_column(df, "country", "Not Available")
-    df = clean_string_column(df, "displayName", "Unknown Player")
+    df = clean_string_column(
+        df,
+        "country",
+        "Not Available"
+    )
 
-    # Handle tour mapping separately
+    df = clean_string_column(
+        df,
+        "displayName",
+        "Unknown Player"
+    )
+
+    # Handle tour mapping
     df["primaryTour"] = (
         df["primaryTour"]
         .fillna("No Tour Provided")
@@ -69,13 +78,24 @@ def player_transformation(df: pd.DataFrame) -> pd.DataFrame:
         .fillna("Unknown Tour")
     )
 
+    # Rename columns for PostgreSQL
+    df = df.rename(
+        columns={
+            "id": "player_id",
+            "isActive": "is_active",
+            "playerBio": "player_bio",
+            "primaryTour": "primary_tour",
+            "displayName": "display_name",
+        }
+    )
+
     return df
 
 if __name__ == "__main__":
-
-    players = extract_players()
-    player_df = pd.DataFrame(players['players'])
+    year = 2026
+    player_df = extract_players()
     # transform player dataframe
     output_df = player_transformation(player_df)
-    # pprint(output_df.head())
-    # pprint(output_df.columns)
+    output_df.to_csv(f"players_{year}.csv",index=False)
+    pprint(output_df.head())
+    pprint(output_df.columns)

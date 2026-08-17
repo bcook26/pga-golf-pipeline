@@ -1,4 +1,5 @@
 import pandas as pd
+import re
 
 def clean_string_column(
     df: pd.DataFrame,
@@ -16,3 +17,10 @@ def clean_string_column(
     )
 
     return df
+
+def create_player_slug(name):
+    """ Generate player name in format - first-last for reference in stats.py"""
+    slug = name.lower()
+    slug = re.sub(r"[^a-z0-9\s-]", "", slug)
+    slug = re.sub(r"\s+", "-", slug)
+    return slug
