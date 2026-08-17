@@ -7,6 +7,10 @@ dependencies = [
     "requests",
     "beautifulsoup4",
     "pandas",
+    "tqdm>=4.70.0",
+    "sqlalchemy>=2.0.52",
+    "python-dotenv>=1.2.3",
+    "psycopg[binary]>=3.3.4",
 ]
 
 [tool.black]
