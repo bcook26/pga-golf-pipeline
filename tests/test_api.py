@@ -259,3 +259,178 @@ def test_compare_history(client: TestClient) -> None:
         params=[("players", "T1"), ("players", "T2"), ("stat_id", "NOPE")],
     )
     assert nope.status_code == 404
+
+
+# --- stats page: percentiles, movers, scatter ---------------------------------
+
+
+@pytest.fixture()
+def stats_conn(conn: Connection) -> Connection:
+    """Adds a 5-player field on two seasons for percentile/mover/scatter tests."""
+    for i in range(1, 6):
+        conn.execute(
+            text(
+                "INSERT INTO golf.players (player_id, display_name, is_active) "
+                "VALUES (:p, :n, true)"
+            ),
+            {"p": f"M{i}", "n": f"Qxqz Mover {i}"},
+        )
+    conn.execute(
+        text("INSERT INTO golf.stats_reference VALUES ('ZX','Zz X'),('ZY','Zz Y')")
+    )
+    # ZX ranks: 2026 vs 2025 (M1 rose 5->1, M5 fell 1->5, M3 unchanged, M2/M4 swap)
+    ranks_prev = {"M1": 5, "M2": 3, "M3": 2, "M4": 4, "M5": 1}
+    ranks_now = {"M1": 1, "M2": 4, "M3": 2, "M4": 3, "M5": 5}
+    for season, ranks in ((1997, ranks_prev), (1998, ranks_now)):
+        for pid, rank in ranks.items():
+            conn.execute(
+                text(
+                    "INSERT INTO golf.player_stats (player_id, season, stat_id, stat_name,"
+                    " stat_value, rank, category, player_name) VALUES "
+                    "(:p,:s,'ZX','Zz X',:v,:r,'ZZ_TEST','n'),"
+                    "(:p,:s,'ZY','Zz Y',:v2,:r,'ZZ_TEST','n')"
+                ),
+                {
+                    "p": pid,
+                    "s": season,
+                    "v": 10.0 - rank,
+                    "v2": float(rank) * 2,
+                    "r": rank,
+                },
+            )
+    return conn
+
+
+@pytest.fixture()
+def stats_client(stats_conn: Connection) -> Iterator[TestClient]:
+    app.dependency_overrides[get_conn] = lambda: stats_conn
+    yield TestClient(app)
+    app.dependency_overrides.clear()
+
+
+def test_percentile_profile(stats_client: TestClient) -> None:
+    r = stats_client.get(
+        "/api/v1/players/M1/percentiles", params={"season": 1998}
+    ).json()
+    assert r["display_name"] == "Qxqz Mover 1"
+    zx = next(s for s in r["stats"] if s["stat_id"] == "ZX")
+    assert (zx["rank"], zx["field_size"], zx["percentile"]) == (1, 5, 100.0)
+    last = stats_client.get(
+        "/api/v1/players/M5/percentiles", params={"season": 1998}
+    ).json()
+    assert next(s for s in last["stats"] if s["stat_id"] == "ZX")["percentile"] == 0.0
+    mid = stats_client.get(
+        "/api/v1/players/M3/percentiles", params={"season": 1998}
+    ).json()
+    assert (
+        next(s for s in mid["stats"] if s["stat_id"] == "ZX")["percentile"] == 75.0
+    )  # rank 2 of 5
+    assert (
+        stats_client.get("/api/v1/players/M1/percentiles").json()["season"] == 1998
+    )  # default
+    assert stats_client.get("/api/v1/players/NOPE/percentiles").status_code == 404
+
+
+def test_percentile_math():
+    from app.routers.players import percentile
+
+    assert percentile(1, 1) == 100.0  # a field of one
+    assert percentile(1, 200) == 100.0 and percentile(200, 200) == 0.0
+    assert percentile(101, 201) == 50.0
+
+
+def test_movers_use_rank_change(stats_client: TestClient) -> None:
+    r = stats_client.get("/api/v1/stats/ZX/movers", params={"limit": 2}).json()
+    assert (r["season"], r["compare_to"], r["players_compared"]) == (1998, 1997, 5)
+    assert [(m["player_id"], m["rank_change"]) for m in r["improvers"]] == [
+        ("M1", 4),
+        ("M4", 1),
+    ]
+    assert [(m["player_id"], m["rank_change"]) for m in r["decliners"]] == [
+        ("M5", -4),
+        ("M2", -1),
+    ]
+    assert all(
+        m["player_id"] != "M3" for m in r["improvers"] + r["decliners"]
+    )  # unchanged
+    explicit = stats_client.get(
+        "/api/v1/stats/ZX/movers", params={"season": 1998, "compare_to": 1997}
+    ).json()
+    assert (
+        explicit["improvers"][0]["rank_from"] == 5
+        and explicit["improvers"][0]["rank_to"] == 1
+    )
+    assert (
+        stats_client.get(
+            "/api/v1/stats/ZX/movers", params={"season": 1998, "compare_to": 1998}
+        ).status_code
+        == 422
+    )
+    assert (
+        stats_client.get("/api/v1/stats/ZX/movers", params={"season": 1997}).status_code
+        == 404
+    )  # nothing earlier
+    assert stats_client.get("/api/v1/stats/NOPE/movers").status_code == 404
+
+
+def test_scatter(stats_client: TestClient) -> None:
+    r = stats_client.get(
+        "/api/v1/stats/scatter", params={"x": "ZX", "y": "ZY", "season": 1998}
+    ).json()
+    assert r["season"] == 1998 and r["x"]["stat_name"] == "Zz X"
+    by = {p["player_id"]: p for p in r["points"]}
+    assert len(by) == 5 and (by["M1"]["x"], by["M1"]["y"]) == (9.0, 2.0)
+    assert (
+        stats_client.get("/api/v1/stats/scatter", params={"x": "ZX", "y": "ZY"}).json()[
+            "season"
+        ]
+        == 1998
+    )
+    assert (
+        stats_client.get(
+            "/api/v1/stats/scatter", params={"x": "ZX", "y": "ZX"}
+        ).status_code
+        == 422
+    )
+    assert (
+        stats_client.get(
+            "/api/v1/stats/scatter", params={"x": "ZX", "y": "NOPE"}
+        ).status_code
+        == 404
+    )
+    assert (
+        stats_client.get("/api/v1/stats/scatter", params={"x": "ZX"}).status_code == 422
+    )  # y required
+
+
+def test_pipeline_status_reports_runs_freshness_and_quality(conn: Connection) -> None:
+    run_id = conn.execute(
+        text(
+            "INSERT INTO golf.etl_runs (pipeline, mode, season, status, rows_loaded, finished_at)"
+            " VALUES ('stats','backfill',:s,'success',3,now()) RETURNING run_id"
+        ),
+        {"s": SEASON_B},
+    ).scalar_one()
+    conn.execute(
+        text(
+            "INSERT INTO golf.data_quality_results (run_id, season, check_name, status, observed, detail)"
+            " VALUES (:r,:s,'zz_check','fail',0.9,'too many nulls'),(:r,:s,'zz_ok','pass',0.0,'fine')"
+        ),
+        {"r": run_id, "s": SEASON_B},
+    )
+    app.dependency_overrides[get_conn] = lambda: conn
+    try:
+        body = TestClient(app).get("/api/v1/pipeline/status", params={"runs": 5}).json()
+    finally:
+        app.dependency_overrides.clear()
+    assert body["overall"] == "fail"
+    assert any("zz_check" in reason for reason in body["reasons"])
+    fresh = next(s for s in body["seasons"] if s["season"] == SEASON_B)
+    assert (
+        fresh["rows"] == 2
+        and fresh["last_run_status"] == "success"
+        and fresh["age_seconds"] < 60
+    )
+    checks = [q for q in body["quality"] if q["season"] == SEASON_B]
+    assert [q["check_name"] for q in checks] == ["zz_check", "zz_ok"]  # worst first
+    assert body["runs"][0]["run_id"] == run_id and len(body["runs"]) <= 5

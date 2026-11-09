@@ -7,7 +7,7 @@ Docs: http://localhost:8000/docs
 from __future__ import annotations
 
 from app.config import get_settings
-from app.routers import compare, health, players, stats
+from app.routers import compare, health, pipeline, players, stats
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -30,3 +30,4 @@ app.include_router(health.router)
 app.include_router(players.router, prefix=API_PREFIX)
 app.include_router(stats.router, prefix=API_PREFIX)
 app.include_router(compare.router, prefix=API_PREFIX)
+app.include_router(pipeline.router, prefix=API_PREFIX)

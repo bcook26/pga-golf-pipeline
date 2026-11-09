@@ -6,6 +6,8 @@ from typing import Any
 from app.db import get_conn
 from app.schemas import (
     Page,
+    PercentileProfile,
+    PercentileStat,
     PlayerDetail,
     PlayerStat,
     PlayerSummary,
@@ -196,6 +198,67 @@ def stat_history(
         points=[
             StatHistoryPoint(
                 season=r["season"], stat_value=r["stat_value"], rank=r["rank"]
+            )
+            for r in rows
+        ],
+    )
+
+
+def percentile(rank: int, field_size: int) -> float:
+    """0-100 where #1 -> 100 and the last-ranked player -> 0."""
+    if field_size <= 1:
+        return 100.0
+    return round(max(0.0, min(100.0, (field_size - rank) / (field_size - 1) * 100)), 1)
+
+
+@router.get("/{player_id}/percentiles", response_model=PercentileProfile)
+def player_percentiles(
+    player_id: str,
+    season: int | None = Query(None, description="Defaults to the player's latest"),
+    category: str | None = Query(
+        None, description="Exact category, e.g. STROKES_GAINED"
+    ),
+    conn: Connection = Depends(get_conn),
+) -> PercentileProfile:
+    """Where the player ranks within the field on each stat (percentile)."""
+    name = _require_player(conn, player_id)
+    if season is None:
+        season = conn.execute(
+            text("SELECT max(season) FROM golf.player_stats WHERE player_id = :id"),
+            {"id": player_id},
+        ).scalar()
+        if season is None:
+            raise HTTPException(
+                status_code=404, detail=f"No stats for player {player_id}"
+            )
+    where = ["s.season = :season", "s.player_id = :pid", "s.rank IS NOT NULL"]
+    params: dict[str, Any] = {"season": season, "pid": player_id}
+    if category:
+        where.append("string_to_array(s.category, ', ') @> ARRAY[:category]")
+        params["category"] = category
+    rows = conn.execute(
+        text(
+            "WITH field AS (SELECT stat_id, max(rank) AS n FROM golf.player_stats "
+            "WHERE season = :season AND rank IS NOT NULL GROUP BY stat_id) "
+            "SELECT s.stat_id, s.stat_name, s.category, s.stat_value, s.rank, f.n "
+            "FROM golf.player_stats s JOIN field f USING (stat_id) "
+            f"WHERE {' AND '.join(where)} ORDER BY s.stat_name, s.stat_id"
+        ),
+        params,
+    ).mappings()
+    return PercentileProfile(
+        player_id=player_id,
+        display_name=name,
+        season=season,
+        stats=[
+            PercentileStat(
+                stat_id=r["stat_id"],
+                stat_name=r["stat_name"],
+                categories=split_categories(r["category"]),
+                stat_value=r["stat_value"],
+                rank=r["rank"],
+                field_size=r["n"],
+                percentile=percentile(r["rank"], r["n"]),
             )
             for r in rows
         ],
