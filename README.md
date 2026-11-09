@@ -249,7 +249,7 @@ types): http://localhost:8000/docs and `/openapi.json`.
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /live` | process liveness only (no database), for platform health checks |
+| `GET /live` | process liveness only (no database), for container health checks |
 | `GET /health` | liveness + database check |
 | `GET /api/v1/seasons` | seasons loaded, with player/stat/row counts |
 | `GET /api/v1/players` | search/filter players (`search`, `country`, `active`, `has_stats`, `season`, `limit`, `offset`) |
@@ -268,6 +268,12 @@ types): http://localhost:8000/docs and `/openapi.json`.
 | `GET /api/v1/tournaments/{id}` | one tournament with every player's result: position, rounds, total, to par, FedExCup points, earnings (finishers first, then cuts and withdrawals) |
 | `GET /api/v1/players/{id}/tournaments` | a player's results newest first, with starts / cuts made / wins / top 10s / earnings / FedEx points totals (`season`, omit for all seasons) |
 | `GET /api/v1/pipeline/status` | warehouse freshness, latest quality results, recent runs and an overall ok/warn/fail |
+
+Rate limiting: per client per minute (60) and hour (600) plus a global hourly
+cap (3000); excess requests get `429` with `Retry-After`. Limits are
+environment variables (`RATE_LIMIT_*`, see `.env.example`; `0` disables one)
+and are off in local docker compose. Behind a reverse proxy set
+`RATE_LIMIT_PROXY_HOPS` so clients are told apart by their real address.
 
 Design notes: the API connects with a read-only transaction (the database
 rejects writes), uses parameterised SQL only (LIKE wildcards in search are
@@ -334,14 +340,6 @@ Design notes:
 ```sh
 cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 ```
-
-## Deploying
-
-A free, public deployment (Netlify frontend, Render API, Neon Postgres, GitHub
-Actions for the daily ETL) is described in [docs/DEPLOY.md](docs/DEPLOY.md).
-The API is rate limited (per client per minute and hour, plus a global hourly
-cap that protects the free-tier budgets); limits are environment variables and
-are off in local docker compose.
 
 ## Data sources
 

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 
 import { ApiError } from '../api/client'
 
-/** After this long, say why: free hosting puts idle servers to sleep. */
+/** After this long, reassure the user that the request is still running. */
 const SLOW_AFTER_MS = 6000
 
 function Loading({ what }: { what: string }) {
@@ -19,7 +19,7 @@ function Loading({ what }: { what: string }) {
         <>
           <br />
           <span className="muted">
-            Still working. The free server sleeps when idle, so the first request can take up to a minute.
+            Still working, this is taking longer than usual.
           </span>
         </>
       )}

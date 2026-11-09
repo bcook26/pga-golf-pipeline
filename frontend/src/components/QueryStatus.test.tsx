@@ -11,14 +11,14 @@ describe('QueryStatus', () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  it('explains a slow first load after a few seconds', () => {
+  it('reassures after a few seconds of waiting', () => {
     render(<QueryStatus query={q({ isPending: true })} what="players" />)
     expect(screen.getByRole('status')).toHaveTextContent('Loading players…')
-    expect(screen.queryByText(/free server sleeps/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/taking longer than usual/i)).not.toBeInTheDocument()
     act(() => {
       vi.advanceTimersByTime(6500)
     })
-    expect(screen.getByText(/free server sleeps/i)).toBeInTheDocument()
+    expect(screen.getByText(/taking longer than usual/i)).toBeInTheDocument()
   })
 
   it('shows the wait time for a rate limit and offers no retry', () => {
