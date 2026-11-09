@@ -408,6 +408,22 @@ Design notes:
 cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 ```
 
+## Build Basics
+
+Day to day, from the repository root:
+
+| Task | Command |
+| --- | --- |
+| Start everything (Postgres, Redis, API, web UI, Airflow) | `docker compose --profile airflow up -d --build` |
+| Start without Airflow | `docker compose up -d` |
+| Check what is running | `docker compose ps` |
+| Watch one service's logs | `docker compose logs -f api` |
+| Stop everything, keep the data | `docker compose --profile airflow down` |
+| Stop and delete the data (a reload is needed afterwards) | `docker compose --profile airflow down -v` |
+
+Service addresses and first-time data loading are in
+[Components and how to run each](#components-and-how-to-run-each).
+
 ## Deploying later (VPS notes)
 
 Nothing here is implemented in the repo: the project runs locally. These are
