@@ -3,8 +3,10 @@ import { Link, NavLink, Route, Routes } from 'react-router-dom'
 import { useTheme } from './lib/useTheme'
 import { ComparePage } from './pages/ComparePage'
 import { LeadersPage } from './pages/LeadersPage'
+import { PipelinePage } from './pages/PipelinePage'
 import { PlayerPage } from './pages/PlayerPage'
 import { PlayersPage } from './pages/PlayersPage'
+import { StatsPage } from './pages/StatsPage'
 
 export default function App() {
   const { theme, cycle } = useTheme()
@@ -23,6 +25,8 @@ export default function App() {
           </NavLink>
           <NavLink to="/leaders">Leaderboards</NavLink>
           <NavLink to="/compare">Compare</NavLink>
+          <NavLink to="/stats">Stats</NavLink>
+          <NavLink to="/pipeline">Pipeline</NavLink>
         </nav>
         <button type="button" className="theme" onClick={cycle} aria-label={`Theme: ${theme}. Click to change`}>
           Theme: {theme}
@@ -34,6 +38,8 @@ export default function App() {
           <Route path="/players/:id" element={<PlayerPage />} />
           <Route path="/leaders" element={<LeadersPage />} />
           <Route path="/compare" element={<ComparePage />} />
+          <Route path="/stats" element={<StatsPage />} />
+          <Route path="/pipeline" element={<PipelinePage />} />
           <Route
             path="*"
             element={

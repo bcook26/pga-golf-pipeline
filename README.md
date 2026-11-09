@@ -15,6 +15,10 @@ flowchart LR
     TR --> LD[load<br/>idempotent upserts]
     LD --> PG[(PostgreSQL<br/>golf schema)]
     AF[Airflow DAGs] -->|full_pipeline.py| EX
+    TR --> DQ{{data-quality gate}}
+    DQ -->|pass / warn| LD
+    DQ -->|fail: abort load| AUDIT
+    DQ --> RES[golf.data_quality_results]
     LD --> AUDIT[golf.etl_runs audit log]
 ```
 
@@ -22,11 +26,12 @@ flowchart LR
 | --- | --- | --- |
 | Extract | `etl/extract/` | source protocols (`base.py`); `pgatour_graphql.py` (stats + history) and `pgatour_pages.py` (player directory); `http.py` rate limiter + retries; `cache.py` Redis cache |
 | Transform | `etl/transform/` | Normalises players/stats, coerces types, enforces the primary key |
+| Quality | `etl/quality/`, `etl/database/quality.py` | Pure checks on the transformed frame, compared with the previous run; results stored in `golf.data_quality_results` |
 | Load | `etl/load/`, `etl/database/` | Chunked, transactional `INSERT ... ON CONFLICT DO UPDATE` |
 | Orchestration | `etl/pipeline/`, `etl/full_pipeline.py` | `runner.py` plans seasons and records every run |
 | Scheduling | `airflow/dags/` | Daily incremental DAG + manual backfill DAG |
 | API | `backend/app/` | FastAPI read API over the warehouse |
-| Frontend | `frontend/` | React + TypeScript (Vite) UI: players, player trends, leaderboards |
+| Frontend | `frontend/` | React + TypeScript (Vite) UI: players, trends, leaderboards, compare, stats explorer, pipeline health |
 | Schema | `db/01_schema.sql` | Idempotent DDL, applied automatically by docker compose |
 
 ### Design decisions
@@ -174,7 +179,28 @@ rows that disappear upstream (e.g. a player dropping off a leaderboard) are
 removed rather than lingering. Rows from other sources, and stats that failed
 to fetch, are left untouched.
 
-### Quality checks
+### Data-quality gate
+
+Every stats load is validated after transform and **before** anything is
+written. Results are stored per run in `golf.data_quality_results` and shown
+on the Pipeline page. A `fail` aborts the load (the run is recorded as failed
+and the warehouse is untouched); a `warn` is logged and loads.
+
+| Check | warn | fail |
+| --- | --- | --- |
+| `null_value_rate` (rows without a numeric value) | > 20% | > 40% |
+| `null_rank_rate` | > 5% | > 20% |
+| `row_count_drift` vs the previous successful run | < 90% (or > 150%) | < 80% |
+| `stat_coverage` (distinct stats vs previous run) | < 90% | < 75% |
+| `rank_validity`, `finite_values`, `rank_one_present` | n/a | any violation |
+
+Baselines come from the last successful stats run for the season, so a first
+load has nothing to drift against and those checks pass. To load despite a
+failure (for example after a known upstream change), pass
+`--ignore-quality-failures` to `full_pipeline.py`; results are still recorded.
+Thresholds live in `etl/quality/checks.py`.
+
+### Tests and CI
 
 ```sh
 uv run pytest -q && uv run mypy etl backend && uv run black --check . && uv run isort --check-only .
@@ -209,6 +235,10 @@ types): http://localhost:8000/docs and `/openapi.json`.
 | `GET /api/v1/stats/{stat_id}/leaders` | leaderboard (`season` defaults to latest, `limit`) |
 | `GET /api/v1/compare` | 2-4 players side by side: `players` (repeat the param), `season`, `category`; one row per stat with each player's value and rank |
 | `GET /api/v1/compare/history` | one stat across seasons for 2-4 players (`players`, `stat_id`) |
+| `GET /api/v1/players/{id}/percentiles` | a player's percentile within the field for each stat (`season`, `category`); percentile = (field - rank) / (field - 1) x 100 |
+| `GET /api/v1/stats/{stat_id}/movers` | biggest rank improvers/decliners between two seasons (`season`, `compare_to`, `limit`) |
+| `GET /api/v1/stats/scatter` | one point per player for two stats (`x`, `y`, `season`) |
+| `GET /api/v1/pipeline/status` | warehouse freshness, latest quality results, recent runs and an overall ok/warn/fail |
 
 Design notes: the API connects with a read-only transaction (the database
 rejects writes), uses parameterised SQL only (LIKE wildcards in search are
@@ -231,6 +261,8 @@ cd frontend && npm install && npm run dev      # http://localhost:5173
 | Players | `/` | name search, season and active filters, paging (state lives in the URL) |
 | Player | `/players/:id` | profile, per-season stats table (category and text filters), trend chart of the selected stat across seasons |
 | Leaderboards | `/leaders` | top N for any stat and season |
+| Stats | `/stats?tab=profile\|movers\|scatter` | **Percentile profile** (one player, category chips, lollipop vs the field median), **Improvers & decliners** (diverging rank-change bars between seasons), **Scatter explorer** (any two stats, up to 3 highlighted players, regression line with r, table view) |
+| Pipeline | `/pipeline` | overall health banner with reasons, per-season freshness, latest data-quality results and recent runs (auto-refreshes) |
 | Compare | `/compare?p=0:<id>&p=1:<id>` | pick 2-4 players: multi-line trend of a stat across seasons plus a head-to-head table that highlights the best rank per row |
 
 Design notes:
@@ -252,6 +284,15 @@ Design notes:
   (slot stored in the URL: `p=<slot>:<id>`, so links are shareable). "Best"
   is the lowest *rank*, which is correct whether a stat is higher-is-better or
   lower-is-better.
+- **Stats views.** Percentile and rank-change rows state their numbers in
+  text ("88th percentile, #22 of 180"; "#118 to #26"), so the bars are
+  redundant encodings. Movers use a diverging blue/red pair around a neutral
+  centre line on *rank* change (so "up" is right for lower-is-better stats);
+  the latest season is flagged as in progress. The scatter keeps every player
+  as a neutral point and highlights at most three, since all-pairs
+  separation is only validated for three categorical colours.
+- **Pipeline status.** Status is always icon + label + colour. Seasons
+  without a successful load in 36 hours are flagged stale.
 - **Accessibility.** Semantic tables with captions, labelled controls, a
   skip link, visible focus, `role="alert"` errors with retry, and a text
   summary of the chart for screen readers.
@@ -295,6 +336,9 @@ website ships to browsers; never commit it.
 
 - [x] FastAPI service over the warehouse
 - [x] React + TypeScript frontend (players, player detail + trend chart, leaderboards)
-- [ ] Frontend: compare players, stat explorer, course pages
+- [x] Frontend: compare players, stats explorer (percentiles, movers, scatter), pipeline health
+- [x] Data-quality gate in the pipeline
+- [ ] Tournament-level data (GraphQL event queries)
+- [ ] Frontend: course pages
 - [ ] Course statistics
 - [ ] Dependabot, integration tests against a Postgres service container

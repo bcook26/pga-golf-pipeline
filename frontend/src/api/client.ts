@@ -15,6 +15,16 @@ export type Comparison = S['Comparison']
 export type CompareStat = S['CompareStat']
 export type CompareValue = S['CompareValue']
 export type ComparisonHistory = S['ComparisonHistory']
+export type PercentileProfile = S['PercentileProfile']
+export type PercentileStat = S['PercentileStat']
+export type Movers = S['Movers']
+export type Mover = S['Mover']
+export type Scatter = S['Scatter']
+export type ScatterPoint = S['ScatterPoint']
+export type PipelineStatus = S['PipelineStatus']
+export type PipelineRun = S['PipelineRun']
+export type QualityResult = S['QualityResult']
+export type SeasonFreshness = S['SeasonFreshness']
 
 export const API_URL: string =
   import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -101,6 +111,20 @@ export const api = {
   ) => get<Comparison>(`${V1}/compare`, { players, ...params }, signal),
   compareHistory: (players: string[], statId: string, signal?: AbortSignal) =>
     get<ComparisonHistory>(`${V1}/compare/history`, { players, stat_id: statId }, signal),
+  percentiles: (
+    id: string,
+    params: { season?: number; category?: string },
+    signal?: AbortSignal,
+  ) => get<PercentileProfile>(`${V1}/players/${encodeURIComponent(id)}/percentiles`, params, signal),
+  movers: (
+    statId: string,
+    params: { season?: number; compare_to?: number; limit?: number },
+    signal?: AbortSignal,
+  ) => get<Movers>(`${V1}/stats/${encodeURIComponent(statId)}/movers`, params, signal),
+  scatter: (params: { x: string; y: string; season?: number }, signal?: AbortSignal) =>
+    get<Scatter>(`${V1}/stats/scatter`, params, signal),
+  pipelineStatus: (signal?: AbortSignal) =>
+    get<PipelineStatus>(`${V1}/pipeline/status`, { runs: 25 }, signal),
   categories: (signal?: AbortSignal) => get<string[]>(`${V1}/stats/categories`, undefined, signal),
   leaders: (
     statId: string,

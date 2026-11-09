@@ -5,12 +5,20 @@ import { useDebounced } from '../lib/useDebounced'
 import { MAX_PLAYERS, type Slotted } from '../lib/slots'
 import { Marker } from './Marker'
 
-function Chip({ player, onRemove }: { player: Slotted; onRemove: (id: string) => void }) {
+function Chip({
+  player,
+  onRemove,
+  marker,
+}: {
+  player: Slotted
+  onRemove: (id: string) => void
+  marker: boolean
+}) {
   const info = usePlayer(player.id)
   const name = info.data?.display_name ?? player.id
   return (
     <li className="chip">
-      <Marker slot={player.slot} />
+      {marker && <Marker slot={player.slot} />}
       <span>{name}</span>
       <button type="button" aria-label={`Remove ${name}`} onClick={() => onRemove(player.id)}>
         ×
@@ -23,14 +31,20 @@ export function PlayerPicker({
   selected,
   onAdd,
   onRemove,
+  max = MAX_PLAYERS,
+  markers = true,
+  label = 'Add a player',
 }: {
   selected: Slotted[]
   onAdd: (id: string) => void
   onRemove: (id: string) => void
+  max?: number
+  markers?: boolean
+  label?: string
 }) {
   const [text, setText] = useState('')
   const term = useDebounced(text.trim())
-  const full = selected.length >= MAX_PLAYERS
+  const full = selected.length >= max
   const results = usePlayers({ search: term || undefined, has_stats: true, limit: 8 })
   const showResults = term.length >= 2 && !full
 
@@ -38,11 +52,11 @@ export function PlayerPicker({
     <div className="picker">
       <ul className="chips" aria-label="Selected players">
         {selected.map((p) => (
-          <Chip key={p.id} player={p} onRemove={onRemove} />
+          <Chip key={p.id} player={p} onRemove={onRemove} marker={markers} />
         ))}
       </ul>
       <label>
-        {full ? `Maximum of ${MAX_PLAYERS} players` : 'Add a player'}
+        {full ? `Maximum of ${max} ${max === 1 ? 'player' : 'players'}` : label}
         <input
           type="search"
           value={text}

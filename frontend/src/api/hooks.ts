@@ -77,3 +77,41 @@ export const useCompareHistory = (players: string[], statId: string | undefined)
     queryFn: ({ signal }) => api.compareHistory(players, statId as string, signal),
     enabled: players.length >= 2 && Boolean(statId),
   })
+
+export const usePercentiles = (
+  id: string | undefined,
+  params: { season?: number; category?: string },
+) =>
+  useQuery({
+    queryKey: ['percentiles', id, params],
+    queryFn: ({ signal }) => api.percentiles(id as string, params, signal),
+    enabled: Boolean(id),
+    placeholderData: keepPreviousData,
+  })
+
+export const useMovers = (
+  statId: string,
+  params: { season?: number; compare_to?: number; limit?: number },
+) =>
+  useQuery({
+    queryKey: ['movers', statId, params],
+    queryFn: ({ signal }) => api.movers(statId, params, signal),
+    enabled: Boolean(statId),
+    placeholderData: keepPreviousData,
+  })
+
+export const useScatter = (params: { x: string; y: string; season?: number }) =>
+  useQuery({
+    queryKey: ['scatter', params],
+    queryFn: ({ signal }) => api.scatter(params, signal),
+    enabled: Boolean(params.x && params.y && params.x !== params.y),
+    placeholderData: keepPreviousData,
+  })
+
+// Operational data: refresh while the page is open.
+export const usePipelineStatus = () =>
+  useQuery({
+    queryKey: ['pipeline-status'],
+    queryFn: ({ signal }) => api.pipelineStatus(signal),
+    refetchInterval: 30_000,
+  })

@@ -95,6 +95,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/players/{player_id}/percentiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Player Percentiles
+         * @description Where the player ranks within the field on each stat (percentile).
+         */
+        get: operations["player_percentiles_api_v1_players__player_id__percentiles_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/seasons": {
         parameters: {
             query?: never;
@@ -141,6 +161,49 @@ export interface paths {
          * @description Stat catalogue with the categories each stat belongs to.
          */
         get: operations["list_stats_api_v1_stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/scatter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stat Scatter
+         * @description One point per player that has a numeric value for both stats.
+         */
+        get: operations["stat_scatter_api_v1_stats_scatter_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/stats/{stat_id}/movers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Stat Movers
+         * @description Biggest movers in the rankings between two seasons.
+         *
+         *     Uses rank rather than value so "improved" is correct for stats where lower
+         *     is better (e.g. scoring average). Only players ranked in both seasons.
+         */
+        get: operations["stat_movers_api_v1_stats__stat_id__movers_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -206,10 +269,34 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pipeline/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pipeline Status */
+        get: operations["pipeline_status_api_v1_pipeline_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AxisInfo */
+        AxisInfo: {
+            /** Stat Id */
+            stat_id: string;
+            /** Stat Name */
+            stat_name: string | null;
+        };
         /** CompareStat */
         CompareStat: {
             /** Stat Id */
@@ -293,6 +380,40 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["LeaderRow"][];
         };
+        /** Mover */
+        Mover: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string | null;
+            /** Rank From */
+            rank_from: number;
+            /** Rank To */
+            rank_to: number;
+            /** Rank Change */
+            rank_change: number;
+            /** Value From */
+            value_from: number | null;
+            /** Value To */
+            value_to: number | null;
+        };
+        /** Movers */
+        Movers: {
+            /** Stat Id */
+            stat_id: string;
+            /** Stat Name */
+            stat_name: string | null;
+            /** Season */
+            season: number;
+            /** Compare To */
+            compare_to: number;
+            /** Players Compared */
+            players_compared: number;
+            /** Improvers */
+            improvers: components["schemas"]["Mover"][];
+            /** Decliners */
+            decliners: components["schemas"]["Mover"][];
+        };
         /** Page[PlayerSummary] */
         Page_PlayerSummary_: {
             /** Items */
@@ -303,6 +424,81 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** PercentileProfile */
+        PercentileProfile: {
+            /** Player Id */
+            player_id: string;
+            /** Display Name */
+            display_name: string;
+            /** Season */
+            season: number;
+            /** Stats */
+            stats: components["schemas"]["PercentileStat"][];
+        };
+        /** PercentileStat */
+        PercentileStat: {
+            /** Stat Id */
+            stat_id: string;
+            /** Stat Name */
+            stat_name: string | null;
+            /** Categories */
+            categories: string[];
+            /** Stat Value */
+            stat_value: number | null;
+            /** Rank */
+            rank: number;
+            /** Field Size */
+            field_size: number;
+            /** Percentile */
+            percentile: number;
+        };
+        /** PipelineRun */
+        PipelineRun: {
+            /** Run Id */
+            run_id: number;
+            /** Pipeline */
+            pipeline: string;
+            /** Mode */
+            mode: string;
+            /** Season */
+            season: number | null;
+            /** Status */
+            status: string;
+            /** Rows Loaded */
+            rows_loaded: number | null;
+            /** Detail */
+            detail: string | null;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+        };
+        /** PipelineStatus */
+        PipelineStatus: {
+            /**
+             * Generated At
+             * Format: date-time
+             */
+            generated_at: string;
+            /**
+             * Overall
+             * @enum {string}
+             */
+            overall: "ok" | "warn" | "fail";
+            /** Reasons */
+            reasons: string[];
+            /** Seasons */
+            seasons: components["schemas"]["SeasonFreshness"][];
+            /** Quality */
+            quality: components["schemas"]["QualityResult"][];
+            /** Runs */
+            runs: components["schemas"]["PipelineRun"][];
         };
         /** PlayerDetail */
         PlayerDetail: {
@@ -367,6 +563,72 @@ export interface components {
             country: string | null;
             /** Primary Tour */
             primary_tour: string | null;
+        };
+        /** QualityResult */
+        QualityResult: {
+            /** Run Id */
+            run_id: number | null;
+            /** Season */
+            season: number | null;
+            /** Check Name */
+            check_name: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "pass" | "warn" | "fail";
+            /** Observed */
+            observed: number | null;
+            /** Threshold */
+            threshold: string | null;
+            /** Detail */
+            detail: string | null;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+        };
+        /** Scatter */
+        Scatter: {
+            /** Season */
+            season: number;
+            x: components["schemas"]["AxisInfo"];
+            y: components["schemas"]["AxisInfo"];
+            /** Points */
+            points: components["schemas"]["ScatterPoint"][];
+        };
+        /** ScatterPoint */
+        ScatterPoint: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string | null;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+            /** Rank X */
+            rank_x: number | null;
+            /** Rank Y */
+            rank_y: number | null;
+        };
+        /** SeasonFreshness */
+        SeasonFreshness: {
+            /** Season */
+            season: number;
+            /** Rows */
+            rows: number;
+            /** Players */
+            players: number;
+            /** Stats */
+            stats: number;
+            /** Last Success At */
+            last_success_at: string | null;
+            /** Age Seconds */
+            age_seconds: number | null;
+            /** Last Run Status */
+            last_run_status: string | null;
         };
         /** SeasonInfo */
         SeasonInfo: {
@@ -589,6 +851,42 @@ export interface operations {
             };
         };
     };
+    player_percentiles_api_v1_players__player_id__percentiles_get: {
+        parameters: {
+            query?: {
+                /** @description Defaults to the player's latest */
+                season?: number | null;
+                /** @description Exact category, e.g. STROKES_GAINED */
+                category?: string | null;
+            };
+            header?: never;
+            path: {
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PercentileProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_seasons_api_v1_seasons_get: {
         parameters: {
             query?: never;
@@ -648,6 +946,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["StatDefinition"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stat_scatter_api_v1_stats_scatter_get: {
+        parameters: {
+            query: {
+                /** @description stat_id for the x axis */
+                x: string;
+                /** @description stat_id for the y axis */
+                y: string;
+                /** @description Defaults to latest with both stats */
+                season?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Scatter"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    stat_movers_api_v1_stats__stat_id__movers_get: {
+        parameters: {
+            query?: {
+                /** @description Defaults to the latest season */
+                season?: number | null;
+                /** @description Defaults to the season before */
+                compare_to?: number | null;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                stat_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Movers"];
                 };
             };
             /** @description Validation Error */
@@ -752,6 +1123,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ComparisonHistory"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pipeline_status_api_v1_pipeline_status_get: {
+        parameters: {
+            query?: {
+                /** @description How many recent runs to return */
+                runs?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PipelineStatus"];
                 };
             };
             /** @description Validation Error */
