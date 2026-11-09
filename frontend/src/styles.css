@@ -166,6 +166,8 @@ select:focus-visible {
   gap: 4px 16px;
   flex: 1;
   flex-wrap: wrap;
+  min-width: 0;
+  padding-right: 12px; /* room for the trailing separator of the last link */
 }
 .site-header nav a {
   color: var(--text-secondary);
@@ -701,4 +703,41 @@ td.best {
 }
 .filters select {
   max-width: 100%;
+}
+
+/* Tournaments */
+.tag {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+  margin: 8px 0 16px;
+}
+.tiles > div {
+  min-width: 0;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+.tiles dt {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+.tiles dd {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.nowrap {
+  white-space: nowrap;
 }

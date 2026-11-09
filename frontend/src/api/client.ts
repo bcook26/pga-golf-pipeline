@@ -25,6 +25,11 @@ export type PipelineStatus = S['PipelineStatus']
 export type PipelineRun = S['PipelineRun']
 export type QualityResult = S['QualityResult']
 export type SeasonFreshness = S['SeasonFreshness']
+export type Tournament = S['TournamentSummary']
+export type TournamentDetail = S['TournamentDetail']
+export type TournamentResult = S['TournamentResult']
+export type PlayerTournaments = S['PlayerTournaments']
+export type PlayerTournamentResult = S['PlayerTournamentResult']
 
 export const API_URL: string =
   import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -125,6 +130,18 @@ export const api = {
     get<Scatter>(`${V1}/stats/scatter`, params, signal),
   pipelineStatus: (signal?: AbortSignal) =>
     get<PipelineStatus>(`${V1}/pipeline/status`, { runs: 25 }, signal),
+  tournaments: (
+    params: { season?: number; search?: string; category?: string },
+    signal?: AbortSignal,
+  ) => get<Tournament[]>(`${V1}/tournaments`, params, signal),
+  tournament: (id: string, signal?: AbortSignal) =>
+    get<TournamentDetail>(`${V1}/tournaments/${encodeURIComponent(id)}`, undefined, signal),
+  playerTournaments: (id: string, params: { season?: number }, signal?: AbortSignal) =>
+    get<PlayerTournaments>(
+      `${V1}/players/${encodeURIComponent(id)}/tournaments`,
+      params,
+      signal,
+    ),
   categories: (signal?: AbortSignal) => get<string[]>(`${V1}/stats/categories`, undefined, signal),
   leaders: (
     statId: string,

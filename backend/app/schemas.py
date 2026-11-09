@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Generic, Literal, TypeVar
 
 from pydantic import BaseModel
@@ -228,3 +228,72 @@ class PipelineStatus(BaseModel):
     seasons: list[SeasonFreshness]
     quality: list[QualityResult]
     runs: list[PipelineRun]
+
+
+class TournamentSummary(BaseModel):
+    tournament_id: str
+    season: int
+    name: str
+    start_date: date | None
+    course_name: str | None
+    city: str | None
+    state_code: str | None
+    country_code: str | None
+    purse_usd: int | None
+    status: str | None  # completed | in_progress | upcoming
+    category: str | None  # SIGNATURE | PLAYOFF | None
+    winner_id: str | None
+    winner_name: str | None
+    winning_to_par: int | None
+    field_size: int
+
+
+class TournamentResult(BaseModel):
+    player_id: str
+    player_name: str | None
+    position_text: str | None
+    position: int | None
+    is_tied: bool
+    status: str  # finished | cut | wd | dq | other
+    total_score: int | None
+    to_par: int | None
+    rounds: list[int | None]  # four entries; None = round not played
+    fedex_points: float | None
+    earnings_usd: float | None
+
+
+class TournamentDetail(TournamentSummary):
+    results: list[TournamentResult]
+
+
+class PlayerTournamentResult(BaseModel):
+    tournament_id: str
+    tournament_name: str
+    season: int
+    start_date: date | None
+    position_text: str | None
+    position: int | None
+    is_tied: bool
+    status: str
+    total_score: int | None
+    to_par: int | None
+    fedex_points: float | None
+    earnings_usd: float | None
+    field_size: int
+
+
+class PlayerTournamentTotals(BaseModel):
+    starts: int
+    cuts_made: int
+    wins: int
+    top_10s: int
+    earnings_usd: float
+    fedex_points: float
+
+
+class PlayerTournaments(BaseModel):
+    player_id: str
+    display_name: str
+    season: int | None  # None = all seasons
+    totals: PlayerTournamentTotals
+    results: list[PlayerTournamentResult]  # newest first

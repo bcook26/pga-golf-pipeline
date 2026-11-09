@@ -434,3 +434,87 @@ def test_pipeline_status_reports_runs_freshness_and_quality(conn: Connection) ->
     checks = [q for q in body["quality"] if q["season"] == SEASON_B]
     assert [q["check_name"] for q in checks] == ["zz_check", "zz_ok"]  # worst first
     assert body["runs"][0]["run_id"] == run_id and len(body["runs"]) <= 5
+
+
+@pytest.fixture()
+def tournaments(conn: Connection) -> None:
+    conn.execute(
+        text(
+            "INSERT INTO golf.tournaments (tournament_id, season, name, start_date,"
+            " status, category, champion_id, purse_usd) VALUES "
+            "('QT1',:s,'Qxqz Open','1999-03-01','completed','SIGNATURE','T2',9000000),"
+            "('QT2',:s,'Qxqz Team Event','1999-04-01','completed',NULL,NULL,NULL),"
+            "('QT3',:s,'Qxqz Upcoming','1999-05-01','upcoming',NULL,NULL,NULL),"
+            "('QT4',:s,'Qxqz Early','1999-02-01','completed',NULL,'T1',1000000)"
+        ),
+        {"s": SEASON_B},
+    )
+    conn.execute(
+        text(
+            "INSERT INTO golf.tournament_results (tournament_id, player_id,"
+            " position_text, position, is_tied, status, total_score, to_par,"
+            " round_1, round_2, round_3, round_4, fedex_points, earnings_usd) VALUES "
+            "('QT1','T2','1',1,false,'finished',270,-18,68,67,68,67,500,1800000),"
+            "('QT1','T1','T2',2,true,'finished',272,-16,68,68,68,68,300,900000),"
+            "('QT1','T3','CUT',NULL,false,'cut',150,6,75,75,NULL,NULL,0,0),"
+            "('QT4','T1','1',1,false,'finished',268,-20,66,67,68,67,500,200000)"
+        )
+    )
+
+
+def test_tournament_list_hides_team_events_and_orders_by_date(
+    client: TestClient, tournaments: None
+) -> None:
+    rows = client.get("/api/v1/tournaments", params={"season": SEASON_B}).json()
+    assert [t["tournament_id"] for t in rows] == ["QT4", "QT1", "QT3"]  # no QT2
+    qt1 = rows[1]
+    assert qt1["winner_id"] == "T2" and qt1["winner_name"] == "Qxqz Testplayer Two"
+    assert qt1["winning_to_par"] == -18 and qt1["field_size"] == 3
+    assert qt1["purse_usd"] == 9_000_000 and qt1["category"] == "SIGNATURE"
+    assert rows[2]["winner_id"] is None and rows[2]["field_size"] == 0
+
+
+def test_tournament_list_filters(client: TestClient, tournaments: None) -> None:
+    by_name = client.get(
+        "/api/v1/tournaments", params={"season": SEASON_B, "search": "early"}
+    ).json()
+    assert [t["tournament_id"] for t in by_name] == ["QT4"]
+    sig = client.get(
+        "/api/v1/tournaments", params={"season": SEASON_B, "category": "signature"}
+    ).json()
+    assert [t["tournament_id"] for t in sig] == ["QT1"]
+    assert client.get("/api/v1/tournaments", params={"season": 1900}).json() == []
+
+
+def test_tournament_detail_orders_finishers_before_cuts(
+    client: TestClient, tournaments: None
+) -> None:
+    d = client.get("/api/v1/tournaments/QT1").json()
+    assert d["name"] == "Qxqz Open" and d["winner_id"] == "T2"
+    assert [r["player_id"] for r in d["results"]] == ["T2", "T1", "T3"]
+    assert d["results"][0]["rounds"] == [68, 67, 68, 67]
+    assert d["results"][1]["is_tied"] is True
+    cut = d["results"][2]
+    assert cut["status"] == "cut" and cut["rounds"] == [75, 75, None, None]
+    assert client.get("/api/v1/tournaments/NOPE").status_code == 404
+
+
+def test_player_tournament_history_and_totals(
+    client: TestClient, tournaments: None
+) -> None:
+    d = client.get("/api/v1/players/T1/tournaments").json()
+    assert [r["tournament_id"] for r in d["results"]] == ["QT1", "QT4"]  # newest first
+    assert d["totals"] == {
+        "starts": 2,
+        "cuts_made": 2,
+        "wins": 1,
+        "top_10s": 2,
+        "earnings_usd": 1_100_000.0,
+        "fedex_points": 800.0,
+    }
+    assert d["results"][0]["field_size"] == 3
+    cut = client.get("/api/v1/players/T3/tournaments").json()["totals"]
+    assert cut["starts"] == 1 and cut["cuts_made"] == 0
+    none = client.get("/api/v1/players/T1/tournaments", params={"season": 1900}).json()
+    assert none["totals"]["starts"] == 0 and none["results"] == []
+    assert client.get("/api/v1/players/NOPE/tournaments").status_code == 404

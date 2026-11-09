@@ -11,6 +11,9 @@ from app.schemas import (
     PlayerDetail,
     PlayerStat,
     PlayerSummary,
+    PlayerTournamentResult,
+    PlayerTournaments,
+    PlayerTournamentTotals,
     StatHistory,
     StatHistoryPoint,
 )
@@ -262,4 +265,49 @@ def player_percentiles(
             )
             for r in rows
         ],
+    )
+
+
+@router.get("/{player_id}/tournaments", response_model=PlayerTournaments)
+def player_tournaments(
+    player_id: str,
+    season: int | None = Query(None, description="omit for all seasons"),
+    conn: Connection = Depends(get_conn),
+) -> PlayerTournaments:
+    """A player's tournament results (newest first) with season totals."""
+    name = _require_player(conn, player_id)
+    params: dict[str, Any] = {"p": player_id}
+    season_filter = ""
+    if season is not None:
+        season_filter = "AND t.season = :season "
+        params["season"] = season
+    rows = conn.execute(
+        text(
+            "SELECT t.tournament_id, t.name AS tournament_name, t.season, "
+            "t.start_date, r.position_text, r.position, r.is_tied, r.status, "
+            "r.total_score, r.to_par, r.fedex_points, r.earnings_usd, "
+            "(SELECT count(*) FROM golf.tournament_results f "
+            " WHERE f.tournament_id = t.tournament_id) AS field_size "
+            "FROM golf.tournament_results r "
+            "JOIN golf.tournaments t ON t.tournament_id = r.tournament_id "
+            f"WHERE r.player_id = :p {season_filter}"
+            "ORDER BY t.start_date DESC NULLS LAST, t.tournament_id DESC"
+        ),
+        params,
+    ).mappings()
+    results = [PlayerTournamentResult(**r) for r in rows]
+    totals = PlayerTournamentTotals(
+        starts=len(results),
+        cuts_made=sum(1 for r in results if r.status == "finished"),
+        wins=sum(1 for r in results if r.position == 1),
+        top_10s=sum(1 for r in results if r.position is not None and r.position <= 10),
+        earnings_usd=sum(r.earnings_usd or 0 for r in results),
+        fedex_points=sum(r.fedex_points or 0 for r in results),
+    )
+    return PlayerTournaments(
+        player_id=player_id,
+        display_name=name,
+        season=season,
+        totals=totals,
+        results=results,
     )

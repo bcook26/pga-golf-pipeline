@@ -2,9 +2,9 @@ import { Suspense, lazy, useMemo, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 
 import type { PlayerStat } from '../api/client'
-import { usePlayer, usePlayerStats, useStatHistory } from '../api/hooks'
+import { usePlayer, usePlayerStats, usePlayerTournaments, useStatHistory } from '../api/hooks'
 import { QueryStatus } from '../components/QueryStatus'
-import { formatRank, formatValue, titleCase } from '../lib/format'
+import { formatDate, formatMoney, formatMoneyShort, formatRank, formatToPar, formatValue, titleCase } from '../lib/format'
 
 // Recharts is large; load it only on the player page.
 const TrendChart = lazy(() =>
@@ -57,6 +57,7 @@ export function PlayerPage() {
     params.get('stat') ??
     (rows.some((r) => r.stat_id === DEFAULT_STAT) ? DEFAULT_STAT : rows[0]?.stat_id)
   const history = useStatHistory(id, selected)
+  const tournaments = usePlayerTournaments(id, { season }, season !== undefined)
 
   function setParam(key: string, value: string | null) {
     const next = new URLSearchParams(params)
@@ -130,6 +131,7 @@ export function PlayerPage() {
 
           <QueryStatus query={stats} what="statistics" />
           {stats.data && (
+            <div className="table-scroll">
             <table>
               <caption className="sr-only">
                 {player.data.display_name} statistics, {season}
@@ -166,8 +168,80 @@ export function PlayerPage() {
                 ))}
               </tbody>
             </table>
+            </div>
           )}
           {stats.data && visible.length === 0 && <p className="status">No stats match these filters.</p>}
+
+          <h2>Tournament results · {season}</h2>
+          <QueryStatus query={tournaments} what="tournament results" />
+          {tournaments.data &&
+            (tournaments.data.results.length === 0 ? (
+              <p className="status">No tournament results this season.</p>
+            ) : (
+              <>
+                <dl className="tiles" aria-label="Season totals">
+                  <div>
+                    <dt>Starts</dt>
+                    <dd>{tournaments.data.totals.starts}</dd>
+                  </div>
+                  <div>
+                    <dt>Cuts made</dt>
+                    <dd>{tournaments.data.totals.cuts_made}</dd>
+                  </div>
+                  <div>
+                    <dt>Wins</dt>
+                    <dd>{tournaments.data.totals.wins}</dd>
+                  </div>
+                  <div>
+                    <dt>Top 10s</dt>
+                    <dd>{tournaments.data.totals.top_10s}</dd>
+                  </div>
+                  <div>
+                    <dt>FedEx pts</dt>
+                    <dd>{Math.round(tournaments.data.totals.fedex_points).toLocaleString()}</dd>
+                  </div>
+                  <div>
+                    <dt>Earnings</dt>
+                    <dd title={formatMoney(tournaments.data.totals.earnings_usd)}>
+                      {formatMoneyShort(tournaments.data.totals.earnings_usd)}
+                    </dd>
+                  </div>
+                </dl>
+                <div className="table-scroll">
+                  <table>
+                    <caption className="sr-only">
+                      {player.data.display_name} tournament results, {season}
+                    </caption>
+                    <thead>
+                      <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Tournament</th>
+                        <th scope="col">Pos</th>
+                        <th scope="col" className="num">To par</th>
+                        <th scope="col" className="num">Total</th>
+                        <th scope="col" className="num">Earnings</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {tournaments.data.results.map((r) => (
+                        <tr key={r.tournament_id}>
+                          <td className="nowrap">{formatDate(r.start_date)}</td>
+                          <td>
+                            <Link to={`/tournaments/${r.tournament_id}`}>{r.tournament_name}</Link>
+                          </td>
+                          <td className={r.position === 1 ? 'best' : undefined}>
+                            {r.position_text ?? '–'}
+                          </td>
+                          <td className="num">{formatToPar(r.to_par)}</td>
+                          <td className="num">{r.total_score ?? '–'}</td>
+                          <td className="num">{r.earnings_usd ? formatMoney(r.earnings_usd) : '–'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ))}
         </>
       )}
     </>

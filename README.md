@@ -191,9 +191,9 @@ year (its own season pills look like `20260`); an unrecognised value silently
 returns the **latest edition**, so the id alone (`R2023002`) must select the
 edition and `year` is never sent.
 
-Not loaded yet: team and match-play events (Zurich Classic, Ryder Cup,
+Out of scope: team and match-play events (Zurich Classic, Ryder Cup,
 Presidents Cup) return team/match results instead of a player leaderboard, so
-they appear in `golf.tournaments` without results.
+they sit in `golf.tournaments` without results and the API leaves them out.
 
 ### Keeping the current season fresh
 
@@ -263,6 +263,9 @@ types): http://localhost:8000/docs and `/openapi.json`.
 | `GET /api/v1/players/{id}/percentiles` | a player's percentile within the field for each stat (`season`, `category`); percentile = (field - rank) / (field - 1) x 100 |
 | `GET /api/v1/stats/{stat_id}/movers` | biggest rank improvers/decliners between two seasons (`season`, `compare_to`, `limit`) |
 | `GET /api/v1/stats/scatter` | one point per player for two stats (`x`, `y`, `season`) |
+| `GET /api/v1/tournaments` | a season's tournaments in date order with winner, winning score, field size and purse (`season` defaults to the latest, `search`, `category`=SIGNATURE/PLAYOFF). Completed events without player results (team and match play) are hidden |
+| `GET /api/v1/tournaments/{id}` | one tournament with every player's result: position, rounds, total, to par, FedExCup points, earnings (finishers first, then cuts and withdrawals) |
+| `GET /api/v1/players/{id}/tournaments` | a player's results newest first, with starts / cuts made / wins / top 10s / earnings / FedEx points totals (`season`, omit for all seasons) |
 | `GET /api/v1/pipeline/status` | warehouse freshness, latest quality results, recent runs and an overall ok/warn/fail |
 
 Design notes: the API connects with a read-only transaction (the database
@@ -286,6 +289,7 @@ cd frontend && npm install && npm run dev      # http://localhost:5173
 | Players | `/` | name search, season and active filters, paging (state lives in the URL) |
 | Player | `/players/:id` | profile, per-season stats table (category and text filters), trend chart of the selected stat across seasons |
 | Leaderboards | `/leaders` | top N for any stat and season |
+| Tournaments | `/tournaments?season=` | a season's events with winner, score to par and purse (filter by type or name); each links to a tournament page with the full results table (rounds, total, FedExCup points, earnings; missed cuts can be hidden). The player page gains a season totals strip and results table |
 | Stats | `/stats?tab=profile\|movers\|scatter` | **Percentile profile** (one player, category chips, lollipop vs the field median), **Improvers & decliners** (diverging rank-change bars between seasons), **Scatter explorer** (any two stats, up to 3 highlighted players, regression line with r, table view) |
 | Pipeline | `/pipeline` | overall health banner with reasons, per-season freshness, latest data-quality results and recent runs (auto-refreshes) |
 | Compare | `/compare?p=0:<id>&p=1:<id>` | pick 2-4 players: multi-line trend of a stat across seasons plus a head-to-head table that highlights the best rank per row |
@@ -364,9 +368,8 @@ website ships to browsers; never commit it.
 - [x] Frontend: compare players, stats explorer (percentiles, movers, scatter), pipeline health
 - [x] Data-quality gate in the pipeline
 - [x] Tournament schedule + results (ETL)
-- [ ] Tournament API endpoints and UI (tournaments list, results, player history)
+- [x] Tournament API endpoints and UI (list, results, player history)
 - [ ] Per-tournament stats (`StatDetails` `eventQuery`, `EVENT_ONLY` / `THROUGH_EVENT`)
-- [ ] Team / match-play event results
 - [ ] Frontend: course pages
 - [ ] Course statistics
 - [ ] Dependabot, integration tests against a Postgres service container

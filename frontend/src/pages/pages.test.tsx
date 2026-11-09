@@ -74,6 +74,7 @@ describe('PlayerPage', () => {
     mockApi([
       ['/players/1', player],
       ['/players/1/stats?', [stat('02675', 'SG: Total', ['STROKES_GAINED']), stat('02564', 'SG: Putting', ['PUTTING'])]],
+      ['/players/1/tournaments', { player_id: '1', display_name: 'Ada Birdie', season: 2025, totals: { starts: 0, cuts_made: 0, wins: 0, top_10s: 0, earnings_usd: 0, fedex_points: 0 }, results: [] }],
       [
         '/history',
         { player_id: '1', stat_id: '02675', stat_name: 'SG: Total', points: [{ season: 2024, stat_value: 1, rank: 5 }, { season: 2025, stat_value: 1.5, rank: 3 }] },

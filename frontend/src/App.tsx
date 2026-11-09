@@ -7,6 +7,8 @@ import { PipelinePage } from './pages/PipelinePage'
 import { PlayerPage } from './pages/PlayerPage'
 import { PlayersPage } from './pages/PlayersPage'
 import { StatsPage } from './pages/StatsPage'
+import { TournamentPage } from './pages/TournamentPage'
+import { TournamentsPage } from './pages/TournamentsPage'
 
 export default function App() {
   const { theme, cycle } = useTheme()
@@ -24,6 +26,7 @@ export default function App() {
             Players
           </NavLink>
           <NavLink to="/leaders">Leaderboards</NavLink>
+          <NavLink to="/tournaments">Tournaments</NavLink>
           <NavLink to="/compare">Compare Players</NavLink>
           <NavLink to="/stats">Stats</NavLink>
           <NavLink to="/pipeline">Pipeline Health</NavLink>
@@ -37,6 +40,8 @@ export default function App() {
           <Route path="/" element={<PlayersPage />} />
           <Route path="/players/:id" element={<PlayerPage />} />
           <Route path="/leaders" element={<LeadersPage />} />
+          <Route path="/tournaments" element={<TournamentsPage />} />
+          <Route path="/tournaments/:id" element={<TournamentPage />} />
           <Route path="/compare" element={<ComparePage />} />
           <Route path="/stats" element={<StatsPage />} />
           <Route path="/pipeline" element={<PipelinePage />} />

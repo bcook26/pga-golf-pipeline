@@ -115,6 +115,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/players/{player_id}/tournaments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Player Tournaments
+         * @description A player's tournament results (newest first) with season totals.
+         */
+        get: operations["player_tournaments_api_v1_players__player_id__tournaments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/seasons": {
         parameters: {
             query?: never;
@@ -278,6 +298,46 @@ export interface paths {
         };
         /** Pipeline Status */
         get: operations["pipeline_status_api_v1_pipeline_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tournaments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Tournaments
+         * @description A season's tournaments in date order, with winner and winning score.
+         */
+        get: operations["list_tournaments_api_v1_tournaments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tournaments/{tournament_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Tournament
+         * @description One tournament with every player's result (finishers first, then cuts).
+         */
+        get: operations["get_tournament_api_v1_tournaments__tournament_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -564,6 +624,62 @@ export interface components {
             /** Primary Tour */
             primary_tour: string | null;
         };
+        /** PlayerTournamentResult */
+        PlayerTournamentResult: {
+            /** Tournament Id */
+            tournament_id: string;
+            /** Tournament Name */
+            tournament_name: string;
+            /** Season */
+            season: number;
+            /** Start Date */
+            start_date: string | null;
+            /** Position Text */
+            position_text: string | null;
+            /** Position */
+            position: number | null;
+            /** Is Tied */
+            is_tied: boolean;
+            /** Status */
+            status: string;
+            /** Total Score */
+            total_score: number | null;
+            /** To Par */
+            to_par: number | null;
+            /** Fedex Points */
+            fedex_points: number | null;
+            /** Earnings Usd */
+            earnings_usd: number | null;
+            /** Field Size */
+            field_size: number;
+        };
+        /** PlayerTournamentTotals */
+        PlayerTournamentTotals: {
+            /** Starts */
+            starts: number;
+            /** Cuts Made */
+            cuts_made: number;
+            /** Wins */
+            wins: number;
+            /** Top 10S */
+            top_10s: number;
+            /** Earnings Usd */
+            earnings_usd: number;
+            /** Fedex Points */
+            fedex_points: number;
+        };
+        /** PlayerTournaments */
+        PlayerTournaments: {
+            /** Player Id */
+            player_id: string;
+            /** Display Name */
+            display_name: string;
+            /** Season */
+            season: number | null;
+            totals: components["schemas"]["PlayerTournamentTotals"];
+            /** Results */
+            results: components["schemas"]["PlayerTournamentResult"][];
+        };
         /** QualityResult */
         QualityResult: {
             /** Run Id */
@@ -669,6 +785,99 @@ export interface components {
             stat_value: number | null;
             /** Rank */
             rank: number | null;
+        };
+        /** TournamentDetail */
+        TournamentDetail: {
+            /** Tournament Id */
+            tournament_id: string;
+            /** Season */
+            season: number;
+            /** Name */
+            name: string;
+            /** Start Date */
+            start_date: string | null;
+            /** Course Name */
+            course_name: string | null;
+            /** City */
+            city: string | null;
+            /** State Code */
+            state_code: string | null;
+            /** Country Code */
+            country_code: string | null;
+            /** Purse Usd */
+            purse_usd: number | null;
+            /** Status */
+            status: string | null;
+            /** Category */
+            category: string | null;
+            /** Winner Id */
+            winner_id: string | null;
+            /** Winner Name */
+            winner_name: string | null;
+            /** Winning To Par */
+            winning_to_par: number | null;
+            /** Field Size */
+            field_size: number;
+            /** Results */
+            results: components["schemas"]["TournamentResult"][];
+        };
+        /** TournamentResult */
+        TournamentResult: {
+            /** Player Id */
+            player_id: string;
+            /** Player Name */
+            player_name: string | null;
+            /** Position Text */
+            position_text: string | null;
+            /** Position */
+            position: number | null;
+            /** Is Tied */
+            is_tied: boolean;
+            /** Status */
+            status: string;
+            /** Total Score */
+            total_score: number | null;
+            /** To Par */
+            to_par: number | null;
+            /** Rounds */
+            rounds: (number | null)[];
+            /** Fedex Points */
+            fedex_points: number | null;
+            /** Earnings Usd */
+            earnings_usd: number | null;
+        };
+        /** TournamentSummary */
+        TournamentSummary: {
+            /** Tournament Id */
+            tournament_id: string;
+            /** Season */
+            season: number;
+            /** Name */
+            name: string;
+            /** Start Date */
+            start_date: string | null;
+            /** Course Name */
+            course_name: string | null;
+            /** City */
+            city: string | null;
+            /** State Code */
+            state_code: string | null;
+            /** Country Code */
+            country_code: string | null;
+            /** Purse Usd */
+            purse_usd: number | null;
+            /** Status */
+            status: string | null;
+            /** Category */
+            category: string | null;
+            /** Winner Id */
+            winner_id: string | null;
+            /** Winner Name */
+            winner_name: string | null;
+            /** Winning To Par */
+            winning_to_par: number | null;
+            /** Field Size */
+            field_size: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -874,6 +1083,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PercentileProfile"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    player_tournaments_api_v1_players__player_id__tournaments_get: {
+        parameters: {
+            query?: {
+                /** @description omit for all seasons */
+                season?: number | null;
+            };
+            header?: never;
+            path: {
+                player_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlayerTournaments"];
                 };
             };
             /** @description Validation Error */
@@ -1155,6 +1398,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PipelineStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_tournaments_api_v1_tournaments_get: {
+        parameters: {
+            query?: {
+                /** @description defaults to the latest season */
+                season?: number | null;
+                search?: string | null;
+                /** @description SIGNATURE or PLAYOFF */
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tournament_api_v1_tournaments__tournament_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tournament_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TournamentDetail"];
                 };
             };
             /** @description Validation Error */

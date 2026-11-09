@@ -115,3 +115,29 @@ export const usePipelineStatus = () =>
     queryFn: ({ signal }) => api.pipelineStatus(signal),
     refetchInterval: 30_000,
   })
+
+export const useTournaments = (params: { season?: number; search?: string; category?: string }) =>
+  useQuery({
+    queryKey: ['tournaments', params],
+    queryFn: ({ signal }) => api.tournaments(params, signal),
+    placeholderData: keepPreviousData,
+  })
+
+export const useTournament = (id: string | undefined) =>
+  useQuery({
+    queryKey: ['tournament', id],
+    queryFn: ({ signal }) => api.tournament(id as string, signal),
+    enabled: Boolean(id),
+  })
+
+export const usePlayerTournaments = (
+  id: string | undefined,
+  params: { season?: number },
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['player-tournaments', id, params],
+    queryFn: ({ signal }) => api.playerTournaments(id as string, params, signal),
+    enabled: Boolean(id) && enabled,
+    placeholderData: keepPreviousData,
+  })
