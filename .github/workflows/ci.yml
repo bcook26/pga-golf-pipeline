@@ -4,14 +4,31 @@ on: [push, pull_request]
 
 jobs:
   test:
-    name: Type check and unit tests
+    name: Type check and tests
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: golf_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    env:
+      ETL_DB_HOST: localhost
+      ETL_DB_PORT: "5432"
+      ETL_DB_NAME: golf_ci
+      DB_PASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - name: Install dependencies
         run: uv sync --dev
+      - name: Apply warehouse schema
+        run: PGPASSWORD=postgres psql -h localhost -U postgres -d golf_ci -v ON_ERROR_STOP=1 -f db/01_schema.sql
       - name: mypy
-        run: uv run mypy etl
-      - name: pytest
+        run: uv run mypy etl backend
+      - name: pytest (unit + API tests against Postgres)
         run: uv run pytest -q

@@ -12,6 +12,8 @@ dependencies = [
     "python-dotenv>=1.2.3",
     "psycopg[binary]>=3.3.4",
     "redis>=8.1.0",
+    "fastapi>=0.162.2",
+    "uvicorn[standard]>=0.54.0",
 ]
 
 [tool.black]
@@ -42,6 +44,7 @@ skip_gitignore = true
 dev = [
     "black>=26.10.1",
     "flake8>=7.5.0",
+    "httpx>=0.28.1",
     "isort>=9.0.2",
     "mypy>=2.4.1",
     "pandas-stubs>=3.1.0.261029",
@@ -51,11 +54,12 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-pythonpath = ["etl"]
+pythonpath = ["etl", "backend"]
 testpaths = ["tests"]
+filterwarnings = ["ignore:Using `httpx` with:Warning"]
 
 [tool.mypy]
 python_version = "3.12"
-mypy_path = "etl"
+mypy_path = "etl:backend"
 explicit_package_bases = true
 ignore_missing_imports = true
