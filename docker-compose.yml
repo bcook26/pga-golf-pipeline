@@ -1,0 +1,97 @@
+# Local dev stack.
+#   docker compose up -d                       # Postgres + Redis
+#   docker compose --profile airflow up -d     # + Airflow (UI on :8080)
+#   API docs: http://localhost:8000/docs (service `api`); web UI: http://localhost:3000
+#
+# Host ports default to 5433/6379 so Postgres does not collide with a native
+# install on 5432. Point the ETL at it with ETL_DB_PORT=5433 in .env.
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${ETL_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      POSTGRES_DB: ${ETL_DB_NAME:-ADHOC_GOLF}
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${POSTGRES_HOST_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # *.sql here run once, on first start of an empty volume
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${ETL_DB_USER:-postgres} -d ${ETL_DB_NAME:-ADHOC_GOLF}"]
+      interval: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${REDIS_HOST_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: docker/api.Dockerfile
+    depends_on:
+      postgres: {condition: service_healthy}
+    environment:
+      ETL_DB_HOST: postgres
+      ETL_DB_PORT: "5432"
+      ETL_DB_NAME: ${ETL_DB_NAME:-ADHOC_GOLF}
+      ETL_DB_USER: ${ETL_DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      # Rate limiting is for the public deployment; off for local use unless set.
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-0}
+      RATE_LIMIT_PER_HOUR: ${RATE_LIMIT_PER_HOUR:-0}
+      RATE_LIMIT_GLOBAL_PER_HOUR: ${RATE_LIMIT_GLOBAL_PER_HOUR:-0}
+      # A day and a half without a successful load is stale (the DAG runs daily)
+      PIPELINE_STALE_AFTER_HOURS: ${PIPELINE_STALE_AFTER_HOURS:-36}
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${API_HOST_PORT:-8000}:8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the bundle; the browser calls the API directly.
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+    depends_on: [api]
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:${WEB_HOST_PORT:-3000}:80"
+
+  airflow:
+    profiles: ["airflow"]
+    build:
+      context: .
+      dockerfile: docker/airflow.Dockerfile
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    environment:
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${ETL_DB_USER:-postgres}:${DB_PASSWORD}@postgres:5432/airflow
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      # ETL settings inside the compose network
+      ETL_DB_HOST: postgres
+      ETL_DB_PORT: "5432"
+      ETL_DB_NAME: ${ETL_DB_NAME:-ADHOC_GOLF}
+      ETL_DB_USER: ${ETL_DB_USER:-postgres}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_URL: redis://redis:6379/0
+      PGA_GRAPHQL_KEY: ${PGA_GRAPHQL_KEY:-}
+    ports:
+      - "${BIND_ADDRESS:-0.0.0.0}:8080:8080"
+    volumes:
+      - ./airflow/dags:/opt/airflow/dags
+      - ./etl:/opt/airflow/etl:ro
+    # `standalone` = dev-only all-in-one (scheduler + webserver); admin
+    # password is printed in the container logs.
+    command: standalone
+
+volumes:
+  pgdata:
