@@ -25,6 +25,7 @@ class Settings:
     rate_limit_per_hour: int = 600
     rate_limit_global_per_hour: int = 3000
     rate_limit_proxy_hops: int = 0
+    pipeline_stale_after_hours: float = 36
 
 
 @lru_cache(maxsize=1)
@@ -41,4 +42,5 @@ def get_settings() -> Settings:
         rate_limit_per_hour=int(os.getenv("RATE_LIMIT_PER_HOUR", "600")),
         rate_limit_global_per_hour=int(os.getenv("RATE_LIMIT_GLOBAL_PER_HOUR", "3000")),
         rate_limit_proxy_hops=int(os.getenv("RATE_LIMIT_PROXY_HOPS", "0")),
+        pipeline_stale_after_hours=float(os.getenv("PIPELINE_STALE_AFTER_HOURS", "36")),
     )

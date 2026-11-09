@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
+from app.config import get_settings
 from app.db import get_conn
 from app.schemas import (
     PipelineRun,
@@ -17,8 +18,6 @@ from sqlalchemy import Connection, text
 
 router = APIRouter(prefix="/pipeline", tags=["pipeline"])
 
-# The incremental DAG runs daily; a day and a half without a success is stale.
-STALE_AFTER = timedelta(hours=36)
 SEVERITY = {"fail": 0, "warn": 1, "pass": 2}  # sort order: worst first
 LEVEL: dict[str, int] = {"ok": 0, "warn": 1, "fail": 2}
 
@@ -104,7 +103,7 @@ def pipeline_status(
         elif q.status == "warn":
             escalate("warn", f"{q.season}: {q.check_name} warning - {q.detail}")
     if seasons and seasons[0].age_seconds is not None:
-        if seasons[0].age_seconds > STALE_AFTER.total_seconds():
+        if seasons[0].age_seconds > get_settings().pipeline_stale_after_hours * 3600:
             hours = seasons[0].age_seconds / 3600
             escalate("warn", f"Season {seasons[0].season} last loaded {hours:.0f}h ago")
 

@@ -5,7 +5,8 @@ and tournament data into a PostgreSQL warehouse (incremental loads, season
 backfills, payload caching, a data-quality gate, an Airflow schedule) and
 serves it through a rate-limited FastAPI backend and a React + TypeScript
 frontend. It currently runs locally with Docker Compose; notes for deploying
-it to a VPS later are in [Deploying later](#deploying-later-vps-notes).
+it to a VPS later are in [Deploying later](#deploying-later-vps-notes). To
+see it working with one command, use the [demo](#demo-one-command).
 
 ## Architecture
 
@@ -408,6 +409,28 @@ Design notes:
 cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 ```
 
+## Demo (one command)
+
+Needs only Docker (Compose v2): no PGA Tour key, no Airflow, no setup.
+
+```bash
+scripts/demo.sh        # build, start and load the data snapshot
+scripts/demo.sh down   # stop it and delete its data
+```
+
+Then open <http://localhost:3100> (API docs at <http://localhost:8100/docs>).
+The first run builds the images (a few minutes); later runs start in seconds
+and do not reload the data. It runs as its own Compose project (`golf-demo`)
+on separate ports, bound to localhost only, so it can run next to a dev stack.
+
+It serves a snapshot (`demo/golf_demo.dump`, ~10 MB: 4,000+ players, 350k
+season-stat rows, 200+ tournaments), restored over the normal schema. Nothing
+calls the PGA Tour at runtime, and the Pipeline Health page's staleness
+warning is disabled (`PIPELINE_STALE_AFTER_HOURS`) since a snapshot never
+refreshes. Regenerate the snapshot from a populated dev stack with
+`scripts/make_demo_seed.sh`. The data is PGA Tour data; see
+[Data sources](#data-sources) before redistributing it.
+
 ## Build Basics
 
 Day to day, from the repository root:
@@ -462,7 +485,8 @@ reverse proxy.
 **Checklist for a real deployment** (none of this exists yet):
 
 1. Create an Ubuntu LTS server, add your SSH key, use a non-root user, and open
-   only ports 22, 80 and 443 (`ufw`).
+   only ports 22, 80 and 443 (`ufw`). Compose publishes on all interfaces by
+   default; set `BIND_ADDRESS=127.0.0.1` to publish only to the host itself.
 2. Install Docker, clone the repo, create `.env` with a strong `DB_PASSWORD`
    and `PGA_GRAPHQL_KEY`.
 3. Production compose changes: do **not** publish Postgres (5433), Redis (6379)

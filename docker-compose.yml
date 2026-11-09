@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
       POSTGRES_DB: ${ETL_DB_NAME:-ADHOC_GOLF}
     ports:
-      - "${POSTGRES_HOST_PORT:-5433}:5432"
+      - "${BIND_ADDRESS:-0.0.0.0}:${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       # *.sql here run once, on first start of an empty volume
@@ -27,7 +27,7 @@ services:
     image: redis:7-alpine
     command: ["redis-server", "--save", "", "--appendonly", "no"]
     ports:
-      - "${REDIS_HOST_PORT:-6379}:6379"
+      - "${BIND_ADDRESS:-0.0.0.0}:${REDIS_HOST_PORT:-6379}:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -50,8 +50,10 @@ services:
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-0}
       RATE_LIMIT_PER_HOUR: ${RATE_LIMIT_PER_HOUR:-0}
       RATE_LIMIT_GLOBAL_PER_HOUR: ${RATE_LIMIT_GLOBAL_PER_HOUR:-0}
+      # A day and a half without a successful load is stale (the DAG runs daily)
+      PIPELINE_STALE_AFTER_HOURS: ${PIPELINE_STALE_AFTER_HOURS:-36}
     ports:
-      - "${API_HOST_PORT:-8000}:8000"
+      - "${BIND_ADDRESS:-0.0.0.0}:${API_HOST_PORT:-8000}:8000"
 
   web:
     build:
@@ -61,7 +63,7 @@ services:
         VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
     depends_on: [api]
     ports:
-      - "${WEB_HOST_PORT:-3000}:80"
+      - "${BIND_ADDRESS:-0.0.0.0}:${WEB_HOST_PORT:-3000}:80"
 
   airflow:
     profiles: ["airflow"]
@@ -83,7 +85,7 @@ services:
       REDIS_URL: redis://redis:6379/0
       PGA_GRAPHQL_KEY: ${PGA_GRAPHQL_KEY:-}
     ports:
-      - "8080:8080"
+      - "${BIND_ADDRESS:-0.0.0.0}:8080:8080"
     volumes:
       - ./airflow/dags:/opt/airflow/dags
       - ./etl:/opt/airflow/etl:ro

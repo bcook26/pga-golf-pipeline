@@ -10,6 +10,7 @@ import json
 from collections.abc import Iterator
 
 import pytest
+from app.config import get_settings
 from app.db import get_conn, get_engine
 from app.main import app
 from fastapi.testclient import TestClient
@@ -434,6 +435,34 @@ def test_pipeline_status_reports_runs_freshness_and_quality(conn: Connection) ->
     checks = [q for q in body["quality"] if q["season"] == SEASON_B]
     assert [q["check_name"] for q in checks] == ["zz_check", "zz_ok"]  # worst first
     assert body["runs"][0]["run_id"] == run_id and len(body["runs"]) <= 5
+
+
+def test_pipeline_stale_threshold_is_configurable(
+    conn: Connection, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    conn.execute(
+        text(
+            "INSERT INTO golf.etl_runs (pipeline, mode, season, status, rows_loaded, finished_at)"
+            " VALUES ('stats','backfill',:s,'success',3,now() - interval '40 hours')"
+        ),
+        {"s": SEASON_B},
+    )
+    app.dependency_overrides[get_conn] = lambda: conn
+
+    def reasons(hours: float) -> list[str]:
+        monkeypatch.setenv("PIPELINE_STALE_AFTER_HOURS", str(hours))
+        get_settings.cache_clear()
+        try:
+            body = TestClient(app).get("/api/v1/pipeline/status").json()
+        finally:
+            get_settings.cache_clear()
+        return [r for r in body["reasons"] if "last loaded" in r]
+
+    try:
+        assert not reasons(87600)  # demo setting: never stale
+        assert reasons(1)
+    finally:
+        app.dependency_overrides.clear()
 
 
 @pytest.fixture()
