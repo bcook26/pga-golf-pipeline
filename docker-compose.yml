@@ -50,6 +50,7 @@ services:
       ETL_DB_USER: ${ETL_DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_URL: redis://redis:6379/0
+      PGA_GRAPHQL_KEY: ${PGA_GRAPHQL_KEY:-}
     ports:
       - "8080:8080"
     volumes:

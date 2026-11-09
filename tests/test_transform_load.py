@@ -76,3 +76,35 @@ def test_select_stat_players():
     # backfill / --all-players: everyone
     assert len(select_stat_players(df, "backfill", False, set())) == 4
     assert len(select_stat_players(df, "incremental", True, set())) == 4
+
+
+def test_replace_scope_deletes_before_upserting_in_one_transaction():
+    from contextlib import contextmanager
+
+    from sqlalchemy import Column, Integer, MetaData, String, Table, and_
+    from sqlalchemy.dialects import postgresql
+
+    table = Table(
+        "t", MetaData(), Column("k", Integer, primary_key=True), Column("v", String)
+    )
+    executed, begins = [], []
+
+    class Conn:
+        def execute(self, stmt):
+            executed.append(str(stmt.compile(dialect=postgresql.dialect())))
+
+    class Eng:
+        @contextmanager
+        def begin(self):
+            begins.append(1)
+            yield Conn()
+
+    upsert_dataframe(
+        pd.DataFrame({"k": [1], "v": ["a"]}),
+        table,
+        ["k"],
+        engine=Eng(),  # type: ignore[arg-type]
+        delete_where=and_(table.c.k > 0),
+    )
+    assert len(begins) == 1
+    assert executed[0].startswith("DELETE FROM t") and "INSERT" in executed[1]

@@ -6,7 +6,7 @@ import logging
 from typing import Any, Protocol
 
 from database.postgres import insert_missing_players
-from load.stats import load_player_stats
+from load.stats import load_graphql_season_stats
 from load.stats_reference import load_stats_reference
 from transform.stats_graphql import transform_stat_details
 from transform.stats_reference import transform_stats_reference
@@ -36,4 +36,5 @@ def run_bulk_stats_pipeline(
         log.info("Added %d players missing from the directory", stubs)
 
     load_stats_reference(transform_stats_reference(stats_df))
-    return load_player_stats(stats_df)
+    fetched_stat_ids = {item["stat_id"] for item in items}
+    return load_graphql_season_stats(stats_df, season, fetched_stat_ids)

@@ -69,16 +69,31 @@ python full_pipeline.py --mode incremental --stats-source pages  # current seaso
 Completed past seasons are skipped on re-run unless `--force` is passed. The
 current season is always refreshed.
 
-### Airflow (scaffold)
+### Airflow
 
 ```sh
 docker compose --profile airflow up -d --build   # UI on http://localhost:8080
+docker compose exec airflow cat /opt/airflow/standalone_admin_password.txt   # login: admin
 ```
 
-`golf_etl_incremental` runs daily; `golf_etl_backfill` is triggered manually
-with optional `seasons` / `force` params. The ETL runs in its own virtualenv
-inside the image because Airflow 2.x pins SQLAlchemy < 2. The compose and DAG
-files have not yet been exercised end-to-end.
+- `golf_etl_incremental` runs daily at 08:00 UTC (players + current season).
+- `golf_etl_backfill` is triggered manually; params `seasons` (list, empty =
+  last 4) and `force`, e.g. `{"seasons": [2024, 2025], "force": true}`.
+
+The ETL runs in its own virtualenv inside the image because Airflow 2.x pins
+SQLAlchemy < 2. `airflow standalone` is a dev-only all-in-one runner; a real
+deployment would use separate scheduler/webserver services and a proper
+executor. Both DAGs have been run end to end against the compose stack.
+Retries, alerting and schedules are still defaults to be tuned.
+
+### Keeping the current season fresh
+
+Current-season payloads are cached for `CURRENT_SEASON_TTL_SECONDS` (default
+1 hour; completed seasons for 30 days). Each load of a season replaces the
+GraphQL-sourced rows for the stats that were fetched in one transaction, so
+rows that disappear upstream (e.g. a player dropping off a leaderboard) are
+removed rather than lingering. Rows from other sources, and stats that failed
+to fetch, are left untouched.
 
 ### Quality checks
 

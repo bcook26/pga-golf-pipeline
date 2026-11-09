@@ -78,12 +78,14 @@ class PGATourGraphQLSource:
         cache: PayloadCache,
         api_key: str,
         url: str = "https://orchestrator.pgatour.com/graphql",
+        current_season_ttl: int = 3600,
     ) -> None:
         if not api_key:
             raise ValueError("PGA_GRAPHQL_KEY is not set")
         self._client = client
         self._cache = cache
         self._url = url
+        self._current_ttl = current_season_ttl
         self._headers = {
             "content-type": "application/json",
             "origin": "https://www.pgatour.com",
@@ -103,7 +105,13 @@ class PGATourGraphQLSource:
             user_agent=s.user_agent,
         )
         cache = cache or PayloadCache.from_url(s.redis_url, s.cache_ttl_seconds)
-        return cls(client, cache, s.graphql_api_key, s.graphql_url)
+        return cls(
+            client,
+            cache,
+            s.graphql_api_key,
+            s.graphql_url,
+            current_season_ttl=s.current_season_ttl_seconds,
+        )
 
     @property
     def cache(self) -> PayloadCache:
@@ -170,7 +178,7 @@ class PGATourGraphQLSource:
                 "rows": [r for r in sd["rows"] if r],
             }
 
-        ttl = None if season == self.current_season() else PAST_SEASON_TTL
+        ttl = self._current_ttl if season == self.current_season() else PAST_SEASON_TTL
         return self._cache.get_or_set(f"gql:stat:{season}:{stat_id}", produce, ttl)
 
     def fetch_season_stat_details(

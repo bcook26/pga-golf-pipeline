@@ -31,6 +31,8 @@ class Settings:
     # Redis payload cache
     redis_url: str
     cache_ttl_seconds: int
+    # Current-season stats change after every tournament; refresh sooner
+    current_season_ttl_seconds: int
     # Polite scraping
     requests_per_second: float
     max_retries: int
@@ -53,6 +55,7 @@ def get_settings() -> Settings:
         db_name=os.getenv("ETL_DB_NAME", "ADHOC_GOLF"),
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         cache_ttl_seconds=_env_int("CACHE_TTL_SECONDS", 6 * 3600),
+        current_season_ttl_seconds=_env_int("CURRENT_SEASON_TTL_SECONDS", 3600),
         requests_per_second=_env_float("REQUESTS_PER_SECOND", 2.0),
         max_retries=_env_int("MAX_RETRIES", 4),
         request_timeout=_env_float("REQUEST_TIMEOUT", 30.0),

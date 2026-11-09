@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from database.connection import engine as make_engine
 from database.tables import tables
-from sqlalchemy import Table
+from sqlalchemy import ColumnElement, Table, and_, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -46,11 +46,14 @@ def upsert_dataframe(
     key_columns: list[str],
     chunksize: int = 1000,
     engine: Engine | None = None,
+    delete_where: ColumnElement[bool] | None = None,
 ) -> int:
     """Upsert ``df`` into ``table`` on ``key_columns``; returns rows sent.
 
     All chunks run in one transaction, so a failure leaves the table
     untouched. Non-key columns present in ``df`` are updated on conflict.
+    If ``delete_where`` is given, matching rows are deleted first in the same
+    transaction (used to drop rows that vanished from a fresh pull).
     """
     if df.empty:
         return 0
@@ -67,6 +70,8 @@ def upsert_dataframe(
     eng = engine or get_engine()
 
     with eng.begin() as conn:
+        if delete_where is not None:
+            conn.execute(delete(table).where(delete_where))
         for start in range(0, len(records), chunksize):
             stmt = insert(table).values(records[start : start + chunksize])
             stmt = stmt.on_conflict_do_update(
@@ -87,6 +92,27 @@ def upsert_players(df: pd.DataFrame) -> int:
 def upsert_player_stats(df: pd.DataFrame) -> int:
     _, stats, _ = get_tables()
     return upsert_dataframe(df, stats, ["player_id", "season", "stat_id"])
+
+
+def replace_graphql_season_stats(
+    df: pd.DataFrame, season: int, stat_ids: set[str]
+) -> int:
+    """Load a freshly pulled season so the warehouse mirrors it.
+
+    Rows previously loaded from the GraphQL source (``details`` set) for the
+    stats that were successfully fetched are removed first, then the new rows
+    are upserted, all in one transaction. Rows from other sources
+    (``details`` NULL) and stats that failed to fetch are left untouched.
+    """
+    _, stats, _ = get_tables()
+    scope = and_(
+        stats.c.season == season,
+        stats.c.stat_id.in_(sorted(stat_ids)),
+        stats.c.details.is_not(None),
+    )
+    return upsert_dataframe(
+        df, stats, ["player_id", "season", "stat_id"], delete_where=scope
+    )
 
 
 def upsert_stats_reference(df: pd.DataFrame) -> int:
