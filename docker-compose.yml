@@ -10,7 +10,7 @@ services:
     environment:
       POSTGRES_USER: ${ETL_DB_USER:-postgres}
       POSTGRES_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
-      POSTGRES_DB: ${ETL_DB_NAME:-pga_golf_etl}
+      POSTGRES_DB: ${ETL_DB_NAME:-ADHOC_GOLF}
     ports:
       - "${POSTGRES_HOST_PORT:-5433}:5432"
     volumes:
@@ -18,7 +18,7 @@ services:
       # *.sql here run once, on first start of an empty volume
       - ./db:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${ETL_DB_USER:-postgres} -d ${ETL_DB_NAME:-pga_golf_etl}"]
+      test: ["CMD-SHELL", "pg_isready -U ${ETL_DB_USER:-postgres} -d ${ETL_DB_NAME:-ADHOC_GOLF}"]
       interval: 5s
       retries: 10
 
@@ -46,7 +46,7 @@ services:
       # ETL settings inside the compose network
       ETL_DB_HOST: postgres
       ETL_DB_PORT: "5432"
-      ETL_DB_NAME: ${ETL_DB_NAME:-pga_golf_etl}
+      ETL_DB_NAME: ${ETL_DB_NAME:-ADHOC_GOLF}
       ETL_DB_USER: ${ETL_DB_USER:-postgres}
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_URL: redis://redis:6379/0

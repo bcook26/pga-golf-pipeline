@@ -48,14 +48,14 @@ flowchart LR
 ```sh
 cp .env.example .env              # set DB_PASSWORD
 docker compose up -d              # Postgres (host port 5433) + Redis
-# in .env: ETL_DB_PORT=5433
+# in .env: ETL_DB_PORT=5433, ETL_DB_NAME=ADHOC_GOLF
 
 uv sync --dev
 cd etl
 uv run python full_pipeline.py --mode incremental
 ```
 
-Without Docker, point `ETL_DB_*` at any Postgres and apply `db/01_schema.sql`.
+Without Docker, point `ETL_DB_*` (host, port, name, user) at any Postgres and apply `db/01_schema.sql`.
 
 ### Modes
 

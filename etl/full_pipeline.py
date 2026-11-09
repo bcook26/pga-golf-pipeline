@@ -23,7 +23,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--all-players",
         action="store_true",
-        help="fetch stats for every player, not just active PGA Tour players",
+        help="probe every player for stats (default for backfill)",
     )
     p.add_argument("--max-workers", type=int, default=4)
     return p.parse_args(argv)

@@ -62,13 +62,17 @@ def test_plan_seasons():
         plan_seasons("nope", 2026, None)
 
 
-def test_select_stat_players_defaults_to_active_pga_tour():
+def test_select_stat_players():
     df = pd.DataFrame(
         {
-            "player_id": ["1", "2", "3"],
-            "is_active": [True, True, False],
-            "primary_tour": ["PGA Tour", "Korn Ferry Tour", "PGA Tour"],
+            "player_id": ["1", "2", "3", "4"],
+            "is_active": [True, True, False, False],
+            "primary_tour": ["PGA Tour", "Korn Ferry Tour", "PGA Tour", "PGA Tour"],
         }
     )
-    assert select_stat_players(df, False)["player_id"].tolist() == ["1"]
-    assert len(select_stat_players(df, True)) == 3
+    # incremental: active PGA Tour + players already holding stats
+    out = select_stat_players(df, "incremental", False, {"3"})
+    assert out["player_id"].tolist() == ["1", "3"]
+    # backfill / --all-players: everyone
+    assert len(select_stat_players(df, "backfill", False, set())) == 4
+    assert len(select_stat_players(df, "incremental", True, set())) == 4

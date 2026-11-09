@@ -79,3 +79,14 @@ def season_already_loaded(engine: Engine, season: int) -> bool:
                 {"s": season},
             ).scalar_one()
         )
+
+
+def players_with_stats(engine: Engine) -> set[str]:
+    """player_ids that already have at least one stat row in the warehouse."""
+    with engine.connect() as conn:
+        return {
+            r[0]
+            for r in conn.execute(
+                text("SELECT DISTINCT player_id FROM golf.player_stats")
+            )
+        }

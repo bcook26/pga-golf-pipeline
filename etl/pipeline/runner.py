@@ -7,7 +7,12 @@ from dataclasses import dataclass, field
 
 import pandas as pd
 from database.postgres import get_engine
-from database.runs import record_skip, season_already_loaded, track_run
+from database.runs import (
+    players_with_stats,
+    record_skip,
+    season_already_loaded,
+    track_run,
+)
 from extract.base import GolfDataSource
 from pipeline.players import run_players_pipeline
 from pipeline.stats import run_stats_pipeline
@@ -36,14 +41,28 @@ def plan_seasons(mode: str, current: int, seasons: list[int] | None) -> list[int
     raise ValueError(f"Unknown mode: {mode!r}")
 
 
-def select_stat_players(players_df: pd.DataFrame, all_players: bool) -> pd.DataFrame:
-    """Default to active PGA Tour players to avoid thousands of empty fetches."""
-    if all_players:
+def select_stat_players(
+    players_df: pd.DataFrame,
+    mode: str,
+    all_players: bool,
+    known_stat_ids: set[str],
+) -> pd.DataFrame:
+    """Players worth requesting stats for.
+
+    Only players that actually have stats ever produce rows (empty results are
+    never loaded), but each probe costs a request, so:
+
+    * backfill / --all-players: probe everyone (results, including "no
+      stats", are cached so this is paid once)
+    * incremental: active PGA Tour players plus anyone who already has stats
+      in the warehouse (covers recently-retired players still in the window)
+    """
+    if all_players or mode == "backfill":
         return players_df
-    mask = players_df["is_active"].fillna(False) & (
+    active_pga = players_df["is_active"].fillna(False) & (
         players_df["primary_tour"] == "PGA Tour"
     )
-    return players_df[mask]
+    return players_df[active_pga | players_df["player_id"].isin(known_stat_ids)]
 
 
 def run(
@@ -64,7 +83,9 @@ def run(
         players_df = run_players_pipeline(source)
         rec.rows_loaded = len(players_df)
 
-    stat_players = select_stat_players(players_df, all_players)
+    stat_players = select_stat_players(
+        players_df, mode, all_players, players_with_stats(engine)
+    )
 
     for season in targets:
         if not source.supports_season(season):
