@@ -25,7 +25,8 @@ flowchart LR
 | Load | `etl/load/`, `etl/database/` | Chunked, transactional `INSERT ... ON CONFLICT DO UPDATE` |
 | Orchestration | `etl/pipeline/`, `etl/full_pipeline.py` | `runner.py` plans seasons and records every run |
 | Scheduling | `airflow/dags/` | Daily incremental DAG + manual backfill DAG |
-| API | `backend/app/` | FastAPI read API over the warehouse for the React frontend |
+| API | `backend/app/` | FastAPI read API over the warehouse |
+| Frontend | `frontend/` | React + TypeScript (Vite) UI: players, player trends, leaderboards |
 | Schema | `db/01_schema.sql` | Idempotent DDL, applied automatically by docker compose |
 
 ### Design decisions
@@ -51,7 +52,8 @@ cp .env.example .env              # set DB_PASSWORD
 docker compose up -d              # Postgres (host port 5433) + Redis
 # in .env: ETL_DB_PORT=5433, ETL_DB_NAME=ADHOC_GOLF
 
-uv sync --dev
+uv sync --dev      # Python is pinned to 3.12 (.python-version, requires-python)
+source .venv/bin/activate   # or prefix commands with `uv run`
 cd etl
 uv run python full_pipeline.py --mode incremental
 ```
@@ -178,7 +180,8 @@ to fetch, are left untouched.
 uv run pytest -q && uv run mypy etl backend && uv run black --check . && uv run isort --check-only .
 ```
 
-GitHub Actions run formatting (black/isort), flake8, and mypy + pytest on every push.
+GitHub Actions run formatting (black/isort), flake8, mypy + pytest (with a
+Postgres service) and the frontend lint/typecheck/test/build on every push.
 
 ## API (FastAPI)
 
@@ -211,6 +214,44 @@ escaped), validates and caps paging parameters, and allows CORS from
 `CORS_ORIGINS` (default: the Vite and CRA dev servers). Tests seed their own
 rows in a rolled-back transaction, so they never touch real data.
 
+## Frontend (React + TypeScript)
+
+Vite + React 19 + TypeScript SPA in `frontend/`, reading the API above.
+
+```sh
+docker compose up -d --build web     # http://localhost:3000 (needs the api service)
+# or for development with hot reload:
+cd frontend && npm install && npm run dev      # http://localhost:5173
+```
+
+| Page | Route | What it shows |
+| --- | --- | --- |
+| Players | `/` | name search, season and active filters, paging (state lives in the URL) |
+| Player | `/players/:id` | profile, per-season stats table (category and text filters), trend chart of the selected stat across seasons |
+| Leaderboards | `/leaders` | top N for any stat and season |
+
+Design notes:
+
+- **Typed contract.** API types are generated from the backend's OpenAPI
+  schema (`npm run gen:api`, API must be running) into
+  `src/api/schema.d.ts`; re-run it when the API changes. TanStack Query
+  handles caching, cancellation and retries; 4xx responses are not retried.
+- **Chart.** Single-series line (value on the only y-axis; rank appears in the
+  tooltip and table, never a second scale), with a crosshair + tooltip, a
+  Chart/Table toggle so the data never depends on colour or hover, and
+  light/dark palettes. Recharts is code-split so list pages stay small.
+- **Accessibility.** Semantic tables with captions, labelled controls, a
+  skip link, visible focus, `role="alert"` errors with retry, and a text
+  summary of the chart for screen readers.
+- **Config.** `VITE_API_URL` (default `http://localhost:8000`) is baked in at
+  build time because the browser calls the API directly; the API must list the
+  web origin in `CORS_ORIGINS` (defaults include `localhost:5173` and `:3000`).
+  In Compose, set `PUBLIC_API_URL` if the API is not at `localhost:8000`.
+
+```sh
+cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+```
+
 ## Data sources
 
 | Source | Class | Serves | Used for |
@@ -241,6 +282,7 @@ website ships to browsers; never commit it.
 ## Roadmap
 
 - [x] FastAPI service over the warehouse
-- [ ] React + TypeScript frontend (next)
+- [x] React + TypeScript frontend (players, player detail + trend chart, leaderboards)
+- [ ] Frontend: compare players, stat explorer, course pages
 - [ ] Course statistics
 - [ ] Dependabot, integration tests against a Postgres service container

@@ -1,0 +1,328 @@
+/* Design tokens. Light by default; dark follows the OS unless the viewer
+   picked a theme (data-theme). Series colour is categorical slot 1. */
+:root {
+  color-scheme: light;
+  --bg: #f4f4f1;
+  --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #6b6a65;
+  --border: #e2e1dc;
+  --grid: #e8e7e3;
+  --grid-strong: #c9c8c2;
+  --accent: #1f64b8;
+  --series-1: #2a78d6;
+  --focus: #2a78d6;
+  --selected: #eaf2fc;
+  --error-bg: #fdecec;
+  --error-text: #8f1d1d;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme='light'])) {
+    color-scheme: dark;
+    --bg: #121211;
+    --surface-1: #1a1a19;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #9c9b91;
+    --border: #2e2e2c;
+    --grid: #2a2a28;
+    --grid-strong: #4a4a46;
+    --accent: #7db2f2;
+    --series-1: #3987e5;
+    --focus: #7db2f2;
+    --selected: #1f2a38;
+    --error-bg: #3a1c1c;
+    --error-text: #f2b4b4;
+  }
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #121211;
+  --surface-1: #1a1a19;
+  --text-primary: #f0efec;
+  --text-secondary: #c3c2b7;
+  --text-muted: #9c9b91;
+  --border: #2e2e2c;
+  --grid: #2a2a28;
+  --grid-strong: #4a4a46;
+  --accent: #7db2f2;
+  --series-1: #3987e5;
+  --focus: #7db2f2;
+  --selected: #1f2a38;
+  --error-bg: #3a1c1c;
+  --error-text: #f2b4b4;
+}
+
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text-primary);
+  font: 16px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+main {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 8px 16px 64px;
+}
+h1 {
+  font-size: 1.75rem;
+  margin: 24px 0 4px;
+}
+h2 {
+  font-size: 1.2rem;
+  margin: 32px 0 12px;
+}
+h3 {
+  font-size: 1rem;
+  margin: 0;
+}
+a,
+button.link {
+  color: var(--accent);
+}
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+.muted {
+  color: var(--text-secondary);
+  margin-top: 0;
+}
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.skip {
+  position: absolute;
+  left: -999px;
+}
+.skip:focus {
+  left: 8px;
+  top: 8px;
+  background: var(--surface-1);
+  padding: 8px;
+  z-index: 10;
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 12px 16px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+}
+.site-header .brand {
+  font-weight: 700;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+.site-header nav {
+  display: flex;
+  gap: 16px;
+  flex: 1;
+}
+.site-header nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 4px 0;
+  border-bottom: 2px solid transparent;
+}
+.site-header nav a.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--series-1);
+}
+
+button {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  min-height: 36px;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+button.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  min-height: 0;
+  text-align: left;
+  text-decoration: underline;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-end;
+  margin: 16px 0;
+}
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+.filters label.checkbox {
+  flex-direction: row;
+  align-items: center;
+  min-height: 36px;
+}
+input[type='search'],
+select {
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  min-height: 36px;
+  min-width: 180px;
+  max-width: 100%;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+th,
+td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+th {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+}
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+tr.selected td {
+  background: var(--selected);
+}
+
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin: 16px 0;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.card table {
+  border: 0;
+}
+.segmented {
+  display: inline-flex;
+}
+.segmented button {
+  border-radius: 0;
+  min-height: 32px;
+}
+.segmented button:first-child {
+  border-radius: 6px 0 0 6px;
+}
+.segmented button:last-child {
+  border-radius: 0 6px 6px 0;
+  border-left: 0;
+}
+.segmented button[aria-pressed='true'] {
+  background: var(--selected);
+  border-color: var(--series-1);
+  font-weight: 600;
+}
+
+/* Recharts: recessive axes in secondary ink, tooltip as a plain card. */
+.chart .recharts-cartesian-axis-tick text {
+  fill: var(--text-secondary);
+  font-size: 12px;
+}
+.chart-tooltip {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  font-size: 0.85rem;
+}
+
+.bio {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin: 8px 0;
+}
+.bio dt {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.bio dd {
+  margin: 0;
+}
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 0;
+}
+.pagination span {
+  flex: 1;
+  color: var(--text-secondary);
+}
+.status {
+  color: var(--text-secondary);
+  padding: 16px 0;
+}
+.status-error {
+  background: var(--error-bg);
+  color: var(--error-text);
+  border-radius: 8px;
+  padding: 12px 16px;
+}
+
+@media (max-width: 640px) {
+  .site-header {
+    flex-wrap: wrap;
+    gap: 8px 16px;
+  }
+  th,
+  td {
+    padding: 8px 6px;
+  }
+  table {
+    font-size: 0.9rem;
+  }
+}

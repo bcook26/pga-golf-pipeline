@@ -1,7 +1,7 @@
 # Local dev stack.
 #   docker compose up -d                       # Postgres + Redis
 #   docker compose --profile airflow up -d     # + Airflow (UI on :8080)
-#   API docs: http://localhost:8000/docs (service `api`, starts with the stack)
+#   API docs: http://localhost:8000/docs (service `api`); web UI: http://localhost:3000
 #
 # Host ports default to 5433/6379 so Postgres does not collide with a native
 # install on 5432. Point the ETL at it with ETL_DB_PORT=5433 in .env.
@@ -48,6 +48,16 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:3000}
     ports:
       - "${API_HOST_PORT:-8000}:8000"
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # Baked into the bundle; the browser calls the API directly.
+        VITE_API_URL: ${PUBLIC_API_URL:-http://localhost:8000}
+    depends_on: [api]
+    ports:
+      - "${WEB_HOST_PORT:-3000}:80"
 
   airflow:
     profiles: ["airflow"]
