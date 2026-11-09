@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 from database.connection import engine as make_engine
 from database.tables import tables
-from sqlalchemy import ColumnElement, Table, and_, delete
+from sqlalchemy import ColumnElement, MetaData, Table, and_, delete
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import Engine
 
@@ -25,6 +25,14 @@ def get_engine() -> Engine:
 @lru_cache(maxsize=1)
 def get_tables() -> tuple[Table, Table, Table]:
     return tables(get_engine())
+
+
+@lru_cache(maxsize=None)
+def get_table(name: str) -> Table:
+    """Reflect one table of the golf schema (cached)."""
+    metadata = MetaData()
+    metadata.reflect(bind=get_engine(), schema="golf", only=[name])
+    return metadata.tables[f"golf.{name}"]
 
 
 def to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
@@ -136,3 +144,19 @@ def insert_missing_players(df: pd.DataFrame, engine: Engine | None = None) -> in
     )
     with (engine or get_engine()).begin() as conn:
         return len(conn.execute(stmt.returning(players.c.player_id)).all())
+
+
+def upsert_tournaments(df: pd.DataFrame) -> int:
+    return upsert_dataframe(df, get_table("tournaments"), ["tournament_id"])
+
+
+def replace_tournament_results(df: pd.DataFrame, tournament_ids: set[str]) -> int:
+    """Replace the results of freshly fetched tournaments in one transaction,
+    so players who vanish from a re-pulled leaderboard do not linger."""
+    table = get_table("tournament_results")
+    return upsert_dataframe(
+        df,
+        table,
+        ["tournament_id", "player_id"],
+        delete_where=table.c.tournament_id.in_(sorted(tournament_ids)),
+    )

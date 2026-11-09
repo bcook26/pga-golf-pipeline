@@ -67,17 +67,17 @@ def record_skip(
         )
 
 
-def season_already_loaded(engine: Engine, season: int) -> bool:
-    """True if a previous run successfully loaded stats rows for ``season``."""
+def season_already_loaded(engine: Engine, season: int, pipeline: str = "stats") -> bool:
+    """True if a previous run of ``pipeline`` successfully loaded ``season``."""
     with engine.connect() as conn:
         return bool(
             conn.execute(
                 text(
                     "SELECT EXISTS (SELECT 1 FROM golf.etl_runs "
-                    "WHERE pipeline='stats' AND season=:s "
+                    "WHERE pipeline=:p AND season=:s "
                     "AND status='success' AND COALESCE(rows_loaded,0) > 0)"
                 ),
-                {"s": season},
+                {"s": season, "p": pipeline},
             ).scalar_one()
         )
 

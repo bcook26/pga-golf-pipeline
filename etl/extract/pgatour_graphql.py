@@ -51,6 +51,39 @@ query StatDetails($tourCode: TourCode!, $statId: String!, $year: Int,
 """
 
 
+SCHEDULE_QUERY = """
+query Schedule($year: String) {
+  schedule(tourCode: "R", year: $year) {
+    seasonYear
+    completed { tournaments { ...T } }
+    upcoming { tournaments { ...T } }
+  }
+}
+fragment T on ScheduleTournament {
+  id tournamentName startDate courseName city stateCode countryCode
+  championId purse tournamentStatus sequenceNumber
+  tournamentCategoryInfo { type }
+}
+"""
+
+TOURNAMENT_RESULTS_QUERY = """
+query Results($id: ID!) {
+  tournamentPastResults(id: $id) {
+    id rounds additionalDataHeaders
+    players {
+      position total parRelativeScore additionalData
+      player { id displayName country }
+      rounds { score parRelativeScore }
+    }
+  }
+}
+"""
+
+COMPLETED = "COMPLETED"
+# A finished event's results are final bar official-money tweaks; refresh daily.
+COMPLETED_CURRENT_TTL = 24 * 3600
+
+
 class GraphQLError(RuntimeError):
     pass
 
@@ -138,6 +171,16 @@ class PGATourGraphQLSource:
             raise GraphQLError(str(body["errors"])[:500])
         return body["data"]["statDetails"]
 
+    def _post(self, operation: str, query: str, variables: dict[str, Any]) -> Any:
+        body = self._client.post_json(
+            self._url,
+            {"operationName": operation, "query": query, "variables": variables},
+            headers=self._headers,
+        )
+        if body.get("errors"):
+            raise GraphQLError(str(body["errors"])[:500])
+        return body["data"]
+
     # -- season discovery -----------------------------------------------
 
     def _season_meta(self, season: int | None) -> dict[str, Any]:
@@ -213,3 +256,72 @@ class PGATourGraphQLSource:
                 )
             )
         return [r for r in results if r is not None]
+
+    # -- tournaments ----------------------------------------------------
+
+    def _schedule(self, season: int) -> list[dict[str, Any]]:
+        """Every scheduled tournament for ``season`` (completed + upcoming)."""
+
+        def produce() -> list[dict[str, Any]]:
+            data = self._post("Schedule", SCHEDULE_QUERY, {"year": str(season)})
+            sched = data["schedule"]
+            months = (sched.get("completed") or []) + (sched.get("upcoming") or [])
+            return [t for m in months for t in m["tournaments"]]
+
+        ttl = self._current_ttl if season == self.current_season() else PAST_SEASON_TTL
+        return self._cache.get_or_set(f"gql:schedule:{season}", produce, ttl)
+
+    def _tournament_results(self, tournament_id: str, season: int) -> dict[str, Any]:
+        def produce() -> dict[str, Any]:
+            # No ``year`` argument: the id (e.g. R2023002) already names the
+            # edition. ``year`` is not a calendar year (the API's own season
+            # pills look like 20260) and an unrecognised value silently falls
+            # back to the latest edition, which once loaded the wrong results.
+            data = self._post(
+                "Results", TOURNAMENT_RESULTS_QUERY, {"id": tournament_id}
+            )
+            results = data["tournamentPastResults"]
+            if results.get("id") != tournament_id:
+                raise GraphQLError(
+                    f"asked for results of {tournament_id}, got {results.get('id')}"
+                )
+            return results
+
+        ttl = (
+            COMPLETED_CURRENT_TTL
+            if season == self.current_season()
+            else PAST_SEASON_TTL
+        )
+        return self._cache.get_or_set(f"gql:results:v2:{tournament_id}", produce, ttl)
+
+    def fetch_season_tournaments(
+        self, season: int, max_workers: int = 4
+    ) -> list[dict[str, Any]]:
+        """Schedule plus results for ``season``.
+
+        Returns [{"tournament": {...}, "results": {...} | None}]. Results are
+        fetched only for completed tournaments; one that fails after retries is
+        logged and kept without results so the schedule stays complete.
+        """
+        schedule = self._schedule(season)
+
+        def fetch(t: dict[str, Any]) -> dict[str, Any]:
+            if t.get("tournamentStatus") != COMPLETED:
+                return {"tournament": t, "results": None}
+            try:
+                return {
+                    "tournament": t,
+                    "results": self._tournament_results(t["id"], season),
+                }
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Results for %s failed: %s", t["id"], exc)
+                return {"tournament": t, "results": None}
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            return list(
+                tqdm(
+                    pool.map(fetch, schedule),
+                    total=len(schedule),
+                    desc=f"Extracting {season} tournaments",
+                )
+            )

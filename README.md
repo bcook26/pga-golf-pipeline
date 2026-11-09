@@ -170,6 +170,31 @@ docker compose --profile airflow down -v     # also delete the database and Airf
   fails, `golf.etl_runs.detail` holds the error and the task retries twice,
   10 minutes apart.
 
+### Tournament data
+
+After each season's stats, the runner loads that season's **schedule**
+(`golf.tournaments`: name, dates, course, location, purse, category,
+champion) and the **results** of every completed event
+(`golf.tournament_results`: one row per player with status finished / cut /
+wd / dq, numeric position and tie flag, total strokes, score to par, rounds
+1-4, FedExCup points and official earnings). Both come from the same GraphQL
+API as the stats (`schedule`, `tournamentPastResults`) and share its rate
+limiting, retries and Redis cache. Tournaments have their own skip logic, so
+a season whose stats are already loaded still gets its tournaments;
+`--no-tournaments` skips them, and a tournament failure is recorded in
+`golf.etl_runs` (pipeline `tournaments`) without stopping other seasons.
+
+Guard: the champion in the schedule must be among the position-1 finishers of
+the results, otherwise the load aborts with a data-quality error. This exists
+because `tournamentPastResults` has a `year` argument that is *not* a calendar
+year (its own season pills look like `20260`); an unrecognised value silently
+returns the **latest edition**, so the id alone (`R2023002`) must select the
+edition and `year` is never sent.
+
+Not loaded yet: team and match-play events (Zurich Classic, Ryder Cup,
+Presidents Cup) return team/match results instead of a player leaderboard, so
+they appear in `golf.tournaments` without results.
+
 ### Keeping the current season fresh
 
 Current-season payloads are cached for `CURRENT_SEASON_TTL_SECONDS` (default
@@ -338,7 +363,10 @@ website ships to browsers; never commit it.
 - [x] React + TypeScript frontend (players, player detail + trend chart, leaderboards)
 - [x] Frontend: compare players, stats explorer (percentiles, movers, scatter), pipeline health
 - [x] Data-quality gate in the pipeline
-- [ ] Tournament-level data (GraphQL event queries)
+- [x] Tournament schedule + results (ETL)
+- [ ] Tournament API endpoints and UI (tournaments list, results, player history)
+- [ ] Per-tournament stats (`StatDetails` `eventQuery`, `EVENT_ONLY` / `THROUGH_EVENT`)
+- [ ] Team / match-play event results
 - [ ] Frontend: course pages
 - [ ] Course statistics
 - [ ] Dependabot, integration tests against a Postgres service container

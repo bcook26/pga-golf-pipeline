@@ -20,6 +20,7 @@ from extract.base import GolfDataSource, StatsSource
 from pipeline.players import run_players_pipeline
 from pipeline.stats import run_stats_pipeline
 from pipeline.stats_bulk import BulkStatsSource, run_bulk_stats_pipeline
+from pipeline.tournaments import TournamentSource, run_tournaments_pipeline
 from quality.checks import failures, run_quality_checks
 from sqlalchemy import Engine
 
@@ -32,6 +33,8 @@ BACKFILL_YEARS = 4
 class RunSummary:
     seasons_loaded: dict[int, int] = field(default_factory=dict)
     seasons_skipped: dict[int, str] = field(default_factory=dict)
+    tournaments_loaded: dict[int, int] = field(default_factory=dict)
+    tournaments_failed: dict[int, str] = field(default_factory=dict)
 
 
 def plan_seasons(mode: str, current: int, seasons: list[int] | None) -> list[int]:
@@ -97,6 +100,42 @@ def make_quality_gate(
     return gate
 
 
+def _load_tournaments(
+    engine: Engine,
+    source: StatsSource,
+    season: int,
+    current: int,
+    mode: str,
+    force: bool,
+    max_workers: int,
+    summary: RunSummary,
+) -> None:
+    """Load a season's schedule and results after its stats.
+
+    Skipped when the source has no tournament support, and for past seasons
+    that already loaded (unless ``force``). A failure is recorded in
+    ``golf.etl_runs`` and the summary but does not stop other seasons, since
+    the season's stats have already been loaded.
+    """
+    if not hasattr(source, "fetch_season_tournaments"):
+        return
+    if (
+        season != current
+        and not force
+        and season_already_loaded(engine, season, "tournaments")
+    ):
+        return
+    try:
+        with track_run(engine, "tournaments", mode, season) as rec:
+            rec.rows_loaded = run_tournaments_pipeline(
+                cast(TournamentSource, source), season, max_workers
+            )
+        summary.tournaments_loaded[season] = rec.rows_loaded or 0
+    except Exception as exc:  # noqa: BLE001
+        log.exception("Tournament load for %s failed", season)
+        summary.tournaments_failed[season] = str(exc)[:200]
+
+
 def run(
     source: GolfDataSource,
     mode: str = "incremental",
@@ -106,6 +145,7 @@ def run(
     max_workers: int = 4,
     stats_source: StatsSource | None = None,
     ignore_quality_failures: bool = False,
+    include_tournaments: bool = True,
 ) -> RunSummary:
     """``source`` provides the player directory; ``stats_source`` (default:
     ``source``) provides stats. A stats source exposing
@@ -126,11 +166,14 @@ def run(
     )
 
     for season in targets:
-        if not stats_source.supports_season(season):
+        supported = stats_source.supports_season(season)
+        reason: str | None = None
+        if not supported:
             reason = f"{stats_source.name} cannot serve season {season}"
         elif season != current and not force and season_already_loaded(engine, season):
             reason = "already loaded (use --force to reload)"
-        else:
+
+        if reason is None:
             with track_run(engine, "stats", mode, season) as rec:
                 gate = make_quality_gate(
                     engine, rec.run_id, season, ignore_quality_failures
@@ -151,10 +194,16 @@ def run(
                         validate=gate,
                     )
             summary.seasons_loaded[season] = rec.rows_loaded or 0
-            continue
+        else:
+            log.warning("Skipping season %s: %s", season, reason)
+            record_skip(engine, "stats", mode, season, reason)
+            summary.seasons_skipped[season] = reason
 
-        log.warning("Skipping season %s: %s", season, reason)
-        record_skip(engine, "stats", mode, season, reason)
-        summary.seasons_skipped[season] = reason
+        # Tournaments have their own skip logic: a season whose stats are
+        # already loaded may still need its schedule and results.
+        if include_tournaments and supported:
+            _load_tournaments(
+                engine, stats_source, season, current, mode, force, max_workers, summary
+            )
 
     return summary

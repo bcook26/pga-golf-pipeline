@@ -73,3 +73,45 @@ CREATE TABLE IF NOT EXISTS golf.data_quality_results (
 
 CREATE INDEX IF NOT EXISTS ix_dq_latest
     ON golf.data_quality_results (season, check_name, checked_at DESC);
+
+-- Tournament-level data (schedule + per-player results) ---------------------
+CREATE TABLE IF NOT EXISTS golf.tournaments (
+    tournament_id   VARCHAR(20)  PRIMARY KEY,          -- e.g. R2025016
+    season          INTEGER      NOT NULL,
+    name            VARCHAR(255) NOT NULL,
+    start_date      DATE,
+    course_name     VARCHAR(255),
+    city            VARCHAR(255),
+    state_code      VARCHAR(10),
+    country_code    VARCHAR(10),
+    purse_usd       BIGINT,
+    status          VARCHAR(20),                        -- completed|in_progress|upcoming
+    category        VARCHAR(20),                        -- SIGNATURE|PLAYOFF|NULL
+    champion_id     VARCHAR(20),
+    sequence_number INTEGER
+);
+
+CREATE INDEX IF NOT EXISTS ix_tournaments_season
+    ON golf.tournaments (season, start_date);
+
+CREATE TABLE IF NOT EXISTS golf.tournament_results (
+    tournament_id VARCHAR(20) NOT NULL
+        REFERENCES golf.tournaments (tournament_id) ON DELETE CASCADE,
+    player_id     VARCHAR(20) NOT NULL REFERENCES golf.players (player_id),
+    position_text VARCHAR(10),                          -- as shown: 1, T11, CUT, W/D
+    position      INTEGER,                              -- numeric finish; NULL if no finish
+    is_tied       BOOLEAN     NOT NULL DEFAULT FALSE,
+    status        VARCHAR(10) NOT NULL,                 -- finished|cut|wd|dq|other
+    total_score   INTEGER,                              -- strokes
+    to_par        INTEGER,                              -- strokes relative to par
+    round_1       INTEGER,
+    round_2       INTEGER,
+    round_3       INTEGER,
+    round_4       INTEGER,
+    fedex_points  NUMERIC,
+    earnings_usd  NUMERIC,
+    PRIMARY KEY (tournament_id, player_id)
+);
+
+CREATE INDEX IF NOT EXISTS ix_tournament_results_player
+    ON golf.tournament_results (player_id);

@@ -37,6 +37,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="record failing data-quality checks but still load (use with care)",
     )
+    p.add_argument(
+        "--no-tournaments",
+        action="store_true",
+        help="skip the tournament schedule/results load",
+    )
     p.add_argument("--max-workers", type=int, default=4)
     return p.parse_args(argv)
 
@@ -63,12 +68,15 @@ def main(argv: list[str] | None = None) -> None:
         all_players=args.all_players,
         max_workers=args.max_workers,
         ignore_quality_failures=args.ignore_quality_failures,
+        include_tournaments=not args.no_tournaments,
     )
 
     minutes, seconds = divmod(time.perf_counter() - start, 60)
     print(
         f"Done in {int(minutes)}m {seconds:.1f}s | loaded={summary.seasons_loaded} "
-        f"skipped={summary.seasons_skipped} | cache hits={source.cache.hits} "
+        f"skipped={summary.seasons_skipped} | "
+        f"tournament results={summary.tournaments_loaded} "
+        f"tournament failures={summary.tournaments_failed} | cache hits={source.cache.hits} "
         f"misses={source.cache.misses}"
     )
 
