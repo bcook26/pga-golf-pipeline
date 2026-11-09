@@ -43,6 +43,7 @@ def player_transformation(df: pd.DataFrame) -> pd.DataFrame:
         df,
         "displayName",
         "Unknown Player",
+        title_case=False,  # keep McIlroy, DeChambeau, etc. as provided
     )
 
     # Map PGA Tour codes

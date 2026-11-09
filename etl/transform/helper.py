@@ -15,17 +15,24 @@ def normalize_category(category) -> str | None:
 
 
 def clean_string_column(
-    df: pd.DataFrame, column: str, default_value: str = "Not Available"
+    df: pd.DataFrame,
+    column: str,
+    default_value: str = "Not Available",
+    title_case: bool = True,
 ) -> pd.DataFrame:
+    """Trim a string column and fill blanks.
 
-    df[column] = (
+    ``title_case`` should be False for proper names: str.title() turns
+    "McIlroy" into "Mcilroy" and "DeChambeau" into "Dechambeau".
+    """
+    cleaned = (
         df[column]
         .astype("string")
         .str.strip()
         .replace("", default_value)
         .fillna(default_value)
-        .str.title()
     )
+    df[column] = cleaned.str.title() if title_case else cleaned
 
     return df
 

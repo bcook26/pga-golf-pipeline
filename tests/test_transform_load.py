@@ -108,3 +108,24 @@ def test_replace_scope_deletes_before_upserting_in_one_transaction():
     )
     assert len(begins) == 1
     assert executed[0].startswith("DELETE FROM t") and "INSERT" in executed[1]
+
+
+def test_player_names_keep_their_capitalisation():
+    from transform.players import player_transformation
+
+    raw = pd.DataFrame(
+        {
+            "id": ["1", "2"],
+            "displayName": ["Rory McIlroy", "  Bryson DeChambeau "],
+            "isActive": [True, True],
+            "country": ["northern ireland", "united states"],
+            "playerBio": [None, None],
+            "primaryTour": ["R", "R"],
+        }
+    )
+    out = player_transformation(raw)
+    assert out["display_name"].tolist() == ["Rory McIlroy", "Bryson DeChambeau"]
+    assert out["country"].tolist() == [
+        "Northern Ireland",
+        "United States",
+    ]  # still title-cased
