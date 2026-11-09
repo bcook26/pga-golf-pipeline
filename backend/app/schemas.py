@@ -86,3 +86,40 @@ class SeasonInfo(BaseModel):
 class Health(BaseModel):
     status: str
     database: str
+
+
+class ComparedPlayer(BaseModel):
+    player_id: str
+    display_name: str
+
+
+class CompareValue(BaseModel):
+    player_id: str
+    stat_value: float | None
+    rank: int | None
+
+
+class CompareStat(BaseModel):
+    stat_id: str
+    stat_name: str | None
+    categories: list[str]
+    # One entry per requested player, in request order; None = no data
+    values: list[CompareValue | None]
+
+
+class Comparison(BaseModel):
+    season: int
+    players: list[ComparedPlayer]
+    stats: list[CompareStat]
+
+
+class PlayerSeries(BaseModel):
+    player_id: str
+    display_name: str
+    points: list[StatHistoryPoint]
+
+
+class ComparisonHistory(BaseModel):
+    stat_id: str
+    stat_name: str | None
+    series: list[PlayerSeries]

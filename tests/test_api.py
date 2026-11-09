@@ -185,3 +185,77 @@ def test_cors_allows_react_dev_origin(client: TestClient) -> None:
         },
     )
     assert r.headers["access-control-allow-origin"] == "http://localhost:5173"
+
+
+def test_compare_players_side_by_side(client: TestClient) -> None:
+    r = client.get(
+        "/api/v1/compare",
+        params=[("players", "T1"), ("players", "T2"), ("season", SEASON_B)],
+    ).json()
+    assert r["season"] == SEASON_B
+    assert [p["player_id"] for p in r["players"]] == ["T1", "T2"]  # request order
+    (stat,) = r["stats"]
+    assert stat["stat_id"] == "ZS1" and stat["categories"] == ["PUTTING", "ZZ_TEST"]
+    assert [(v["player_id"], v["stat_value"], v["rank"]) for v in stat["values"]] == [
+        ("T1", 2.0, 2),
+        ("T2", 3.0, 1),
+    ]
+
+
+def test_compare_missing_data_is_null_and_season_defaults(client: TestClient) -> None:
+    only_a = client.get(
+        "/api/v1/compare",
+        params=[("players", "T1"), ("players", "T2"), ("season", SEASON_A)],
+    ).json()
+    assert [v and v["player_id"] for v in only_a["stats"][0]["values"]] == ["T1", None]
+    latest = client.get(
+        "/api/v1/compare", params=[("players", "T1"), ("players", "T2")]
+    ).json()
+    assert latest["season"] == SEASON_B  # latest season with data for these players
+    cat = client.get(
+        "/api/v1/compare",
+        params=[
+            ("players", "T1"),
+            ("players", "T2"),
+            ("season", SEASON_B),
+            ("category", "ZZ"),
+        ],
+    ).json()
+    assert cat["stats"] == []  # exact category match
+
+
+def test_compare_validation(client: TestClient) -> None:
+    one = client.get("/api/v1/compare", params=[("players", "T1")])
+    assert one.status_code == 422
+    five = client.get(
+        "/api/v1/compare", params=[("players", f"T{i}") for i in range(5)]
+    )
+    assert five.status_code == 422
+    dupes = client.get("/api/v1/compare", params=[("players", "T1"), ("players", "T1")])
+    assert dupes.status_code == 422
+    missing = client.get(
+        "/api/v1/compare", params=[("players", "T1"), ("players", "NOPE")]
+    )
+    assert missing.status_code == 404 and "NOPE" in missing.json()["detail"]
+    nostats = client.get(
+        "/api/v1/compare", params=[("players", "T3"), ("players", "T3x")]
+    )
+    assert nostats.status_code == 404
+
+
+def test_compare_history(client: TestClient) -> None:
+    h = client.get(
+        "/api/v1/compare/history",
+        params=[("players", "T1"), ("players", "T2"), ("stat_id", "ZS1")],
+    ).json()
+    assert h["stat_name"] == "Zz Test Putting"
+    by_player = {
+        s["player_id"]: [(p["season"], p["rank"]) for p in s["points"]]
+        for s in h["series"]
+    }
+    assert by_player == {"T1": [(SEASON_A, 5), (SEASON_B, 2)], "T2": [(SEASON_B, 1)]}
+    nope = client.get(
+        "/api/v1/compare/history",
+        params=[("players", "T1"), ("players", "T2"), ("stat_id", "NOPE")],
+    )
+    assert nope.status_code == 404
