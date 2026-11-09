@@ -741,3 +741,12 @@ td.best {
 .nowrap {
   white-space: nowrap;
 }
+
+.site-footer {
+  max-width: 1040px;
+  margin: 32px auto 0;
+  padding: 16px;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}

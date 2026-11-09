@@ -56,6 +56,12 @@ export default function App() {
           />
         </Routes>
       </main>
+      <footer className="site-footer">
+        <p>
+          Unofficial portfolio project, not affiliated with or endorsed by the PGA Tour. Player and
+          tournament data is the property of the PGA Tour and is shown here for educational purposes.
+        </p>
+      </footer>
     </>
   )
 }
