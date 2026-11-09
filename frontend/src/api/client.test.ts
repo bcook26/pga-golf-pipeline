@@ -33,3 +33,10 @@ describe('api', () => {
     expect(String(fetchMock.mock.calls[0]?.[0])).toContain('/players/a%2Fb/stats?season=2024')
   })
 })
+
+describe('array params', () => {
+  it('repeats the parameter for arrays', () => {
+    const url = buildUrl('/api/v1/compare', { players: ['1', '2'], season: 2025 })
+    expect(new URL(url).searchParams.getAll('players')).toEqual(['1', '2'])
+  })
+})

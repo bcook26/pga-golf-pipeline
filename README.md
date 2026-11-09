@@ -90,7 +90,7 @@ docker compose --profile airflow up -d --build   # Postgres, Redis, API, Airflow
 docker compose ps                                # wait until postgres/redis are healthy
 ```
 
-The first start builds the image (~2 min) and initialises Airflow's metadata
+The first start builds the image (~2 min) and initializes Airflow's metadata
 database (`airflow` DB in the same Postgres). The warehouse schema in
 `ADHOC_GOLF` is created automatically on the first start of an empty volume.
 
@@ -207,6 +207,8 @@ types): http://localhost:8000/docs and `/openapi.json`.
 | `GET /api/v1/stats` | stat catalogue (`search`, `category`) |
 | `GET /api/v1/stats/categories` | category names for filter dropdowns |
 | `GET /api/v1/stats/{stat_id}/leaders` | leaderboard (`season` defaults to latest, `limit`) |
+| `GET /api/v1/compare` | 2-4 players side by side: `players` (repeat the param), `season`, `category`; one row per stat with each player's value and rank |
+| `GET /api/v1/compare/history` | one stat across seasons for 2-4 players (`players`, `stat_id`) |
 
 Design notes: the API connects with a read-only transaction (the database
 rejects writes), uses parameterised SQL only (LIKE wildcards in search are
@@ -229,6 +231,7 @@ cd frontend && npm install && npm run dev      # http://localhost:5173
 | Players | `/` | name search, season and active filters, paging (state lives in the URL) |
 | Player | `/players/:id` | profile, per-season stats table (category and text filters), trend chart of the selected stat across seasons |
 | Leaderboards | `/leaders` | top N for any stat and season |
+| Compare | `/compare?p=0:<id>&p=1:<id>` | pick 2-4 players: multi-line trend of a stat across seasons plus a head-to-head table that highlights the best rank per row |
 
 Design notes:
 
@@ -240,6 +243,15 @@ Design notes:
   tooltip and table, never a second scale), with a crosshair + tooltip, a
   Chart/Table toggle so the data never depends on colour or hover, and
   light/dark palettes. Recharts is code-split so list pages stay small.
+- **Compare view.** Series identity is colour *and* marker shape (circle,
+  square, diamond, triangle) with a legend that carries each player's latest
+  value, so it works without colour or hover. Colours come from a palette
+  checked with the dataviz validator (CVD-safe adjacent pairs in both modes;
+  the low light-mode contrast of aqua/yellow is covered by the legend labels,
+  shapes and table view). A player keeps their colour when another is removed
+  (slot stored in the URL: `p=<slot>:<id>`, so links are shareable). "Best"
+  is the lowest *rank*, which is correct whether a stat is higher-is-better or
+  lower-is-better.
 - **Accessibility.** Semantic tables with captions, labelled controls, a
   skip link, visible focus, `role="alert"` errors with retry, and a text
   summary of the chart for screen readers.

@@ -83,7 +83,7 @@ export function TrendChart({ title, points }: { title: string; points: TrendPoin
                 cursor={{ stroke: 'var(--grid-strong)', strokeWidth: 1 }}
               />
               <Line
-                type="monotone"
+                type="linear"
                 dataKey="stat_value"
                 stroke="var(--series-1)"
                 strokeWidth={2}

@@ -71,8 +71,9 @@ export function PlayerPage() {
 
   return (
     <>
-      <p>
+      <p className="crumbs">
         <Link to="/">← All players</Link>
+        <Link to={`/compare?p=0:${encodeURIComponent(id)}`}>Compare with other players →</Link>
       </p>
       <h1>{player.data.display_name}</h1>
       <p className="muted">

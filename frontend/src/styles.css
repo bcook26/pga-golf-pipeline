@@ -12,6 +12,10 @@
   --grid-strong: #c9c8c2;
   --accent: #1f64b8;
   --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
+  --series-4: #eda100;
+  --best: #e3f1e8;
   --focus: #2a78d6;
   --selected: #eaf2fc;
   --error-bg: #fdecec;
@@ -30,6 +34,10 @@
     --grid-strong: #4a4a46;
     --accent: #7db2f2;
     --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --best: #1c2e24;
     --focus: #7db2f2;
     --selected: #1f2a38;
     --error-bg: #3a1c1c;
@@ -48,6 +56,10 @@
   --grid-strong: #4a4a46;
   --accent: #7db2f2;
   --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --best: #1c2e24;
   --focus: #7db2f2;
   --selected: #1f2a38;
   --error-bg: #3a1c1c;
@@ -325,4 +337,121 @@ tr.selected td {
   table {
     font-size: 0.9rem;
   }
+}
+
+/* Compare view */
+.crumbs {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.picker {
+  margin: 16px 0;
+}
+.picker label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  max-width: 360px;
+}
+.chips,
+.results,
+.legend {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.chip button {
+  border: 0;
+  border-radius: 999px;
+  min-height: 28px;
+  min-width: 28px;
+  padding: 0;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.results {
+  max-width: 360px;
+  margin-top: 4px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.results button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  border-radius: 0;
+  border-bottom: 1px solid var(--border);
+}
+.results .status {
+  padding: 8px 12px;
+}
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin: 0 0 8px;
+}
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.tip-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.tip-row .num {
+  margin-left: auto;
+  padding-left: 12px;
+}
+.th-player {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
+  text-align: left;
+}
+.th-player svg {
+  margin-top: 3px;
+  flex: none;
+}
+.th-player a {
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.85rem;
+}
+.table-scroll {
+  overflow-x: auto;
+  /* contain the absolutely-positioned .sr-only spans inside wide tables */
+  position: relative;
+}
+.legend-note {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+}
+td.best {
+  background: var(--best);
+  font-weight: 600;
 }

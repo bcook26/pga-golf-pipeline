@@ -11,6 +11,10 @@ export type StatDefinition = S['StatDefinition']
 export type Leaderboard = S['Leaderboard']
 export type SeasonInfo = S['SeasonInfo']
 export type PlayersPage = S['Page_PlayerSummary_']
+export type Comparison = S['Comparison']
+export type CompareStat = S['CompareStat']
+export type CompareValue = S['CompareValue']
+export type ComparisonHistory = S['ComparisonHistory']
 
 export const API_URL: string =
   import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
@@ -24,13 +28,17 @@ export class ApiError extends Error {
   }
 }
 
-type Params = Record<string, string | number | boolean | null | undefined>
+type Scalar = string | number | boolean | null | undefined
+type Params = Record<string, Scalar | Scalar[]>
 
 export function buildUrl(path: string, params: Params = {}): string {
   const url = new URL(path, API_URL)
   for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === '') continue
-    url.searchParams.set(key, String(value))
+    // Arrays repeat the parameter: ?players=a&players=b
+    for (const item of Array.isArray(value) ? value : [value]) {
+      if (item === undefined || item === null || item === '') continue
+      url.searchParams.append(key, String(item))
+    }
   }
   return url.toString()
 }
@@ -86,6 +94,13 @@ export const api = {
     ),
   stats: (params: { search?: string; category?: string }, signal?: AbortSignal) =>
     get<StatDefinition[]>(`${V1}/stats`, params, signal),
+  compare: (
+    players: string[],
+    params: { season?: number; category?: string },
+    signal?: AbortSignal,
+  ) => get<Comparison>(`${V1}/compare`, { players, ...params }, signal),
+  compareHistory: (players: string[], statId: string, signal?: AbortSignal) =>
+    get<ComparisonHistory>(`${V1}/compare/history`, { players, stat_id: statId }, signal),
   categories: (signal?: AbortSignal) => get<string[]>(`${V1}/stats/categories`, undefined, signal),
   leaders: (
     statId: string,

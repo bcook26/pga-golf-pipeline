@@ -166,10 +166,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare Players
+         * @description Every stat any of the players has in ``season``, side by side.
+         */
+        get: operations["compare_players_api_v1_compare_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/compare/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Compare History
+         * @description One stat across seasons for each player - drives the multi-line chart.
+         */
+        get: operations["compare_history_api_v1_compare_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CompareStat */
+        CompareStat: {
+            /** Stat Id */
+            stat_id: string;
+            /** Stat Name */
+            stat_name: string | null;
+            /** Categories */
+            categories: string[];
+            /** Values */
+            values: (components["schemas"]["CompareValue"] | null)[];
+        };
+        /** CompareValue */
+        CompareValue: {
+            /** Player Id */
+            player_id: string;
+            /** Stat Value */
+            stat_value: number | null;
+            /** Rank */
+            rank: number | null;
+        };
+        /** ComparedPlayer */
+        ComparedPlayer: {
+            /** Player Id */
+            player_id: string;
+            /** Display Name */
+            display_name: string;
+        };
+        /** Comparison */
+        Comparison: {
+            /** Season */
+            season: number;
+            /** Players */
+            players: components["schemas"]["ComparedPlayer"][];
+            /** Stats */
+            stats: components["schemas"]["CompareStat"][];
+        };
+        /** ComparisonHistory */
+        ComparisonHistory: {
+            /** Stat Id */
+            stat_id: string;
+            /** Stat Name */
+            stat_name: string | null;
+            /** Series */
+            series: components["schemas"]["PlayerSeries"][];
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -237,6 +322,15 @@ export interface components {
             } | null;
             /** Seasons */
             seasons: number[];
+        };
+        /** PlayerSeries */
+        PlayerSeries: {
+            /** Player Id */
+            player_id: string;
+            /** Display Name */
+            display_name: string;
+            /** Points */
+            points: components["schemas"]["StatHistoryPoint"][];
         };
         /** PlayerStat */
         PlayerStat: {
@@ -589,6 +683,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Leaderboard"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_players_api_v1_compare_get: {
+        parameters: {
+            query: {
+                /** @description 2-4 player ids (repeat the parameter) */
+                players: string[];
+                /** @description Defaults to latest with data */
+                season?: number | null;
+                /** @description Exact category, e.g. PUTTING */
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Comparison"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_history_api_v1_compare_history_get: {
+        parameters: {
+            query: {
+                stat_id: string;
+                /** @description 2-4 player ids (repeat the parameter) */
+                players: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ComparisonHistory"];
                 };
             };
             /** @description Validation Error */

@@ -58,3 +58,22 @@ export const useLeaders = (statId: string, params: { season?: number; limit?: nu
     enabled: Boolean(statId),
     placeholderData: keepPreviousData,
   })
+
+export const useCompare = (
+  players: string[],
+  params: { season?: number; category?: string },
+  enabled = true,
+) =>
+  useQuery({
+    queryKey: ['compare', players, params],
+    queryFn: ({ signal }) => api.compare(players, params, signal),
+    enabled: enabled && players.length >= 2,
+    placeholderData: keepPreviousData,
+  })
+
+export const useCompareHistory = (players: string[], statId: string | undefined) =>
+  useQuery({
+    queryKey: ['compare-history', players, statId],
+    queryFn: ({ signal }) => api.compareHistory(players, statId as string, signal),
+    enabled: players.length >= 2 && Boolean(statId),
+  })
