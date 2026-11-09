@@ -1,42 +1,12 @@
-import os
-
 import pandas as pd
-from dotenv import load_dotenv
-from sqlalchemy import MetaData, create_engine
 from sqlalchemy.dialects.postgresql import insert
 
+from database.connection import engine
+from database.tables import tables
 
-load_dotenv()
+sql_engine = engine()
 
-
-# -------------------------
-# Database Configuration
-# -------------------------
-
-DATABASE_URL = (
-    f"postgresql+psycopg://postgres:{os.getenv('DB_PASSWORD')}"
-    "@localhost:5432/pga_golf_etl"
-)
-
-engine = create_engine(DATABASE_URL)
-
-
-# -------------------------
-# Database Tables
-# -------------------------
-
-metadata = MetaData()
-
-metadata.reflect(
-    bind=engine,
-    schema="golf",
-)
-
-players_table = metadata.tables["golf.players"]
-
-player_stats_table = metadata.tables[
-    "golf.player_stats"
-]
+players_table, player_stats_table, stats_reference_table = tables(sql_engine)
 
 
 # -------------------------
@@ -45,32 +15,32 @@ player_stats_table = metadata.tables[
 
 def upsert_players(
     df: pd.DataFrame,
-):
+) -> None:
 
     if df.empty:
         print("No player data to load.")
         return
 
     records = df.to_dict(
-        orient="records"
+        orient="records",
     )
 
     stmt = insert(
-        players_table
+        players_table,
     ).values(records)
 
     stmt = stmt.on_conflict_do_update(
         index_elements=["player_id"],
         set_={
+            "display_name": stmt.excluded.display_name,
             "is_active": stmt.excluded.is_active,
             "country": stmt.excluded.country,
             "player_bio": stmt.excluded.player_bio,
             "primary_tour": stmt.excluded.primary_tour,
-            "display_name": stmt.excluded.display_name,
         },
     )
 
-    with engine.begin() as conn:
+    with sql_engine.begin() as conn:
         conn.execute(stmt)
 
     print(
@@ -85,14 +55,15 @@ def upsert_players(
 def upsert_player_stats(
     df: pd.DataFrame,
     chunksize: int = 1000,
-):
+) -> None:
 
     if df.empty:
+        print("No player stats to load.")
         return
 
     total_rows = len(df)
 
-    with engine.begin() as conn:
+    with sql_engine.begin() as conn:
 
         for start in range(
             0,
@@ -105,11 +76,11 @@ def upsert_player_stats(
             ]
 
             records = chunk.to_dict(
-                orient="records"
+                orient="records",
             )
 
             stmt = insert(
-                player_stats_table
+                player_stats_table,
             ).values(records)
 
             stmt = stmt.on_conflict_do_update(
@@ -138,3 +109,38 @@ def upsert_player_stats(
                 f"{min(start + chunksize, total_rows)} "
                 f"of {total_rows} stat rows."
             )
+
+
+# -------------------------
+# Stats Reference UPSERT
+# -------------------------
+
+def upsert_stats_reference(
+    df: pd.DataFrame,
+) -> None:
+
+    if df.empty:
+        print("No stats reference data to load.")
+        return
+
+    records = df.to_dict(
+        orient="records",
+    )
+
+    stmt = insert(
+        stats_reference_table,
+    ).values(records)
+
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["stat_id"],
+        set_={
+            "stat_name": stmt.excluded.stat_name,
+        },
+    )
+
+    with sql_engine.begin() as conn:
+        conn.execute(stmt)
+
+    print(
+        f"Upserted {len(df)} stat reference records."
+    )

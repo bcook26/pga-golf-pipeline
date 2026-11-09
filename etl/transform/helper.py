@@ -1,6 +1,16 @@
 import pandas as pd
 import re
 
+def normalize_category(category) -> str | None:
+
+    if category is None:
+        return None
+
+    if isinstance(category, list):
+        return ", ".join(category)
+
+    return str(category)
+
 def clean_string_column(
     df: pd.DataFrame,
     column: str,

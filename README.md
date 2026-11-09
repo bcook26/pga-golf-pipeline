@@ -2,6 +2,17 @@
 
 This project uses FastAPI to create an interface for interacting with different kinds of golf statistics and good to know facts
 
+
+## Basics of getting started Claude
+- I want to build out a full stack application that I can use to track player and course statistics
+- data will be ingested from the PGA tour site = "https://www.pgatour.com/" and should follow any security/API guidelines they have in place
+- The backend is somewhat put together in PostgreSQL, the API interaction is happening in Python, the frontend should be built in React and fastAPI backend should handle requests from users
+- I need to create an airflow job so that I can regularly run ETL to update any player information
+- The project should use actions for code formatting, linting, type checking etc. 
+- Currently I've only got the ETL portion going which loads players/stats into postgres. 
+
+# Stopped working on pipeline/orchestration (upsert merge failure due to schema change during refactor)
+
 ---
 
 ## Table of Contents
