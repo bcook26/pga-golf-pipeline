@@ -24,9 +24,9 @@ export default function App() {
             Players
           </NavLink>
           <NavLink to="/leaders">Leaderboards</NavLink>
-          <NavLink to="/compare">Compare</NavLink>
+          <NavLink to="/compare">Compare Players</NavLink>
           <NavLink to="/stats">Stats</NavLink>
-          <NavLink to="/pipeline">Pipeline</NavLink>
+          <NavLink to="/pipeline">Pipeline Health</NavLink>
         </nav>
         <button type="button" className="theme" onClick={cycle} aria-label={`Theme: ${theme}. Click to change`}>
           Theme: {theme}

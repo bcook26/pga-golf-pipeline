@@ -173,6 +173,15 @@ select:focus-visible {
   padding: 4px 0;
   border-bottom: 2px solid transparent;
 }
+.site-header nav a:not(:last-child)::after {
+  content: '|';
+  color: var(--text-muted);
+  position: absolute;
+  right: -11px;
+}
+.site-header nav a {
+  position: relative;
+}
 .site-header nav a.active {
   color: var(--text-primary);
   border-bottom-color: var(--series-1);
@@ -351,6 +360,10 @@ tr.selected td {
   .site-header {
     flex-wrap: wrap;
     gap: 8px 16px;
+  }
+  .site-header nav {
+    order: 3;
+    flex-basis: 100%;
   }
   th,
   td {
