@@ -16,6 +16,16 @@ class HistoricalSeasonUnavailable(Exception):
     """The source cannot serve the requested (non-current) season."""
 
 
+class StatsSource(Protocol):
+    """Minimum a stats provider offers the runner (season discovery)."""
+
+    name: str
+
+    def current_season(self) -> int: ...
+
+    def supports_season(self, season: int) -> bool: ...
+
+
 @runtime_checkable
 class GolfDataSource(Protocol):
     name: str

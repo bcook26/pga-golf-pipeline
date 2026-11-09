@@ -20,7 +20,7 @@ flowchart LR
 
 | Layer | Path | Notes |
 | --- | --- | --- |
-| Extract | `etl/extract/` | `GolfDataSource` protocol (`base.py`); `pgatour_pages.py` is the current implementation; `http.py` rate limiter + retries; `cache.py` Redis cache |
+| Extract | `etl/extract/` | source protocols (`base.py`); `pgatour_graphql.py` (stats + history) and `pgatour_pages.py` (player directory); `http.py` rate limiter + retries; `cache.py` Redis cache |
 | Transform | `etl/transform/` | Normalises players/stats, coerces types, enforces the primary key |
 | Load | `etl/load/`, `etl/database/` | Chunked, transactional `INSERT ... ON CONFLICT DO UPDATE` |
 | Orchestration | `etl/pipeline/`, `etl/full_pipeline.py` | `runner.py` plans seasons and records every run |
@@ -63,7 +63,7 @@ Without Docker, point `ETL_DB_*` (host, port, name, user) at any Postgres and ap
 python full_pipeline.py --mode incremental                       # players + current season
 python full_pipeline.py --mode backfill                          # last 4 seasons
 python full_pipeline.py --mode backfill --seasons 2024 2025 --force
-python full_pipeline.py --mode incremental --all-players         # not just active PGA Tour players
+python full_pipeline.py --mode incremental --stats-source pages  # current season via page data
 ```
 
 Completed past seasons are skipped on re-run unless `--force` is passed. The
@@ -88,20 +88,35 @@ uv run pytest -q && uv run mypy etl && uv run black --check . && uv run isort --
 
 GitHub Actions run formatting (black/isort), flake8, and mypy + pytest on every push.
 
+## Data sources
+
+| Source | Class | Serves | Used for |
+| --- | --- | --- | --- |
+| Page data (`__NEXT_DATA__`) | `PGATourPageSource` | current season | player directory; `--stats-source pages` |
+| PGA Tour GraphQL `StatDetails` | `PGATourGraphQLSource` | current + history (2004+) | season stats (default) |
+
+The GraphQL source fetches one whole-season leaderboard per stat (~400 stats
+per season, all players at once) instead of one request per player. Rows map
+into `golf.player_stats` as `stat_value` (first column), `supporting_stat`
+(second), `supporting_value` (last), and every column the API returned is kept
+in the `details` JSONB column. Players that appear in historical leaderboards
+but not in the current directory are stubbed so the foreign key holds.
+
+Set `PGA_GRAPHQL_KEY` in `.env` (see `.env.example`). It is the key the public
+website ships to browsers; never commit it.
+
 ## Known limitations
 
-- **No historical seasons from the current source.** pgatour.com server-renders
-  only the *current* season (`?season=`/`?year=` are ignored; past seasons load
-  client-side). `backfill` therefore records past seasons as `skipped` until a
-  source that serves history is plugged in (e.g. a licensed provider). History
-  accumulates going forward through incremental runs.
-- The extractor reads the site's embedded Next.js page data, which is not a
-  documented API and can change without notice. Keep request rates low and
-  review pgatour.com's terms of use before any non-personal use.
+- Both sources read **undocumented** pgatour.com interfaces that can change
+  without notice. Request rates are deliberately low and cached (completed
+  seasons are cached for 30 days). Review pgatour.com's terms of use before
+  any non-personal use. The GraphQL host publishes no robots.txt.
+- Leaderboards only include players ranked in each stat, so a player's
+  `player_stats` rows exist only for seasons where they qualified.
+- `above_or_below` is not provided by the GraphQL source (NULL for those rows).
 
 ## Roadmap
 
-- [ ] Historical source for backfill
 - [ ] FastAPI service over the warehouse
 - [ ] React frontend
 - [ ] Course statistics

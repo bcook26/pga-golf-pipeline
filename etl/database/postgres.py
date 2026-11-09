@@ -92,3 +92,21 @@ def upsert_player_stats(df: pd.DataFrame) -> int:
 def upsert_stats_reference(df: pd.DataFrame) -> int:
     _, _, reference = get_tables()
     return upsert_dataframe(df, reference, ["stat_id"])
+
+
+def insert_missing_players(df: pd.DataFrame, engine: Engine | None = None) -> int:
+    """Insert minimal player rows that don't exist yet (never overwrites).
+
+    Historical leaderboards include retired players who are absent from the
+    current directory; stats rows need them for the foreign key.
+    """
+    if df.empty:
+        return 0
+    players, _, _ = get_tables()
+    stmt = (
+        insert(players)
+        .values(to_records(df))
+        .on_conflict_do_nothing(index_elements=["player_id"])
+    )
+    with (engine or get_engine()).begin() as conn:
+        return len(conn.execute(stmt.returning(players.c.player_id)).all())

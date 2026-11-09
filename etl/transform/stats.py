@@ -96,7 +96,9 @@ def clean_stats_frame(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
     for col in ("stat_value", "field_average"):
-        df[col] = pd.to_numeric(df[col], errors="coerce")
+        # "1,234" / "12.5%" -> numeric; anything else (e.g. "-") -> NULL
+        cleaned = df[col].astype("string").str.replace(r"[,%$]", "", regex=True)
+        df[col] = pd.to_numeric(cleaned, errors="coerce")
     df["rank"] = pd.to_numeric(df["rank"], errors="coerce").astype("Int64")
     for col in ("supporting_stat", "supporting_value"):
         df[col] = df[col].astype("string")

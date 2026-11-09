@@ -11,6 +11,7 @@ import argparse
 import logging
 import time
 
+from extract.pgatour_graphql import PGATourGraphQLSource
 from extract.pgatour_pages import PGATourPageSource
 from pipeline.runner import run
 
@@ -25,6 +26,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="probe every player for stats (default for backfill)",
     )
+    p.add_argument(
+        "--stats-source",
+        choices=["graphql", "pages"],
+        default="graphql",
+        help="graphql serves history (needs PGA_GRAPHQL_KEY); pages = current season only",
+    )
     p.add_argument("--max-workers", type=int, default=4)
     return p.parse_args(argv)
 
@@ -37,8 +44,14 @@ def main(argv: list[str] | None = None) -> None:
     start = time.perf_counter()
 
     source = PGATourPageSource.from_settings()
+    stats_source = (
+        PGATourGraphQLSource.from_settings(cache=source.cache)
+        if args.stats_source == "graphql"
+        else source
+    )
     summary = run(
         source,
+        stats_source=stats_source,
         mode=args.mode,
         seasons=args.seasons,
         force=args.force,

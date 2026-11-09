@@ -36,6 +36,9 @@ class Settings:
     max_retries: int
     request_timeout: float
     user_agent: str
+    # PGA Tour GraphQL (key is the one the public site ships to browsers)
+    graphql_url: str
+    graphql_api_key: str
 
 
 @lru_cache(maxsize=1)
@@ -57,4 +60,8 @@ def get_settings() -> Settings:
             "SCRAPER_USER_AGENT",
             "golf-etl-portfolio-project/0.1 (+personal, non-commercial)",
         ),
+        graphql_url=os.getenv(
+            "PGA_GRAPHQL_URL", "https://orchestrator.pgatour.com/graphql"
+        ),
+        graphql_api_key=os.getenv("PGA_GRAPHQL_KEY", ""),
     )

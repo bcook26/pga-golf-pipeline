@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import cast
 
 import pandas as pd
 from database.postgres import get_engine
@@ -13,9 +14,10 @@ from database.runs import (
     season_already_loaded,
     track_run,
 )
-from extract.base import GolfDataSource
+from extract.base import GolfDataSource, StatsSource
 from pipeline.players import run_players_pipeline
 from pipeline.stats import run_stats_pipeline
+from pipeline.stats_bulk import BulkStatsSource, run_bulk_stats_pipeline
 
 log = logging.getLogger(__name__)
 
@@ -72,9 +74,14 @@ def run(
     force: bool = False,
     all_players: bool = False,
     max_workers: int = 4,
+    stats_source: StatsSource | None = None,
 ) -> RunSummary:
+    """``source`` provides the player directory; ``stats_source`` (default:
+    ``source``) provides stats. A stats source exposing
+    ``fetch_season_stat_details`` is used in bulk (whole-season) mode."""
     engine = get_engine()
-    current = source.current_season()
+    stats_source = stats_source or source
+    current = stats_source.current_season()
     targets = plan_seasons(mode, current, seasons)
     summary = RunSummary()
     log.info("mode=%s current_season=%s targets=%s", mode, current, targets)
@@ -88,15 +95,23 @@ def run(
     )
 
     for season in targets:
-        if not source.supports_season(season):
-            reason = f"{source.name} cannot serve season {season}"
+        if not stats_source.supports_season(season):
+            reason = f"{stats_source.name} cannot serve season {season}"
         elif season != current and not force and season_already_loaded(engine, season):
             reason = "already loaded (use --force to reload)"
         else:
             with track_run(engine, "stats", mode, season) as rec:
-                rec.rows_loaded = run_stats_pipeline(
-                    source, stat_players, season, max_workers
-                )
+                if hasattr(stats_source, "fetch_season_stat_details"):
+                    rec.rows_loaded = run_bulk_stats_pipeline(
+                        cast(BulkStatsSource, stats_source), season, max_workers
+                    )
+                else:
+                    rec.rows_loaded = run_stats_pipeline(
+                        cast(GolfDataSource, stats_source),
+                        stat_players,
+                        season,
+                        max_workers,
+                    )
             summary.seasons_loaded[season] = rec.rows_loaded or 0
             continue
 

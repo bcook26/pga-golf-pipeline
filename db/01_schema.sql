@@ -28,10 +28,14 @@ CREATE TABLE IF NOT EXISTS golf.player_stats (
     supporting_stat  VARCHAR(255),
     supporting_value VARCHAR(255),
     player_name      VARCHAR(255),
+    details          JSONB,  -- every column the source returned for this stat
     PRIMARY KEY (player_id, season, stat_id),
     CONSTRAINT fk_player_stats_player
         FOREIGN KEY (player_id) REFERENCES golf.players (player_id)
 );
+
+-- for databases created before `details` existed
+ALTER TABLE golf.player_stats ADD COLUMN IF NOT EXISTS details JSONB;
 
 CREATE INDEX IF NOT EXISTS ix_player_stats_season_stat
     ON golf.player_stats (season, stat_id);

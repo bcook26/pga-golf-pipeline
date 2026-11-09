@@ -61,7 +61,7 @@ class PoliteClient:
             total=max_retries,
             backoff_factor=1.0,
             status_forcelist=(429, 500, 502, 503, 504),
-            allowed_methods=("GET",),
+            allowed_methods=("GET", "POST"),  # GraphQL reads are idempotent
             respect_retry_after_header=True,
         )
         adapter = HTTPAdapter(max_retries=retry)
@@ -73,3 +73,13 @@ class PoliteClient:
         response = self._session.get(url, timeout=self._timeout)
         response.raise_for_status()
         return response.text
+
+    def post_json(
+        self, url: str, payload: dict, headers: dict[str, str] | None = None
+    ) -> dict:
+        self._limiter.wait()
+        response = self._session.post(
+            url, json=payload, headers=headers, timeout=self._timeout
+        )
+        response.raise_for_status()
+        return response.json()
