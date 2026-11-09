@@ -1,3 +1,5 @@
+from collections.abc import Callable
+
 import pandas as pd
 from extract.base import GolfDataSource
 from extract.stats import extract_player_stats
@@ -12,6 +14,7 @@ def run_stats_pipeline(
     players_df: pd.DataFrame,
     year: int,
     max_workers: int = 4,
+    validate: Callable[[pd.DataFrame], None] | None = None,
 ) -> int:
     """Run extract/transform/load for one season; returns stat rows loaded."""
     extracted = extract_player_stats(
@@ -20,6 +23,8 @@ def run_stats_pipeline(
     stats_df = transform_stats(extracted, year=year)
     if stats_df.empty:
         return 0
+    if validate is not None:
+        validate(stats_df)
 
     load_stats_reference(transform_stats_reference(stats_df))
     return load_player_stats(stats_df)

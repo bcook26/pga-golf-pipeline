@@ -10,7 +10,8 @@ from sqlalchemy.engine import Engine
 
 
 class RunRecord:
-    def __init__(self) -> None:
+    def __init__(self, run_id: int | None = None) -> None:
+        self.run_id = run_id
         self.rows_loaded: int | None = None
         self.detail: str | None = None
 
@@ -29,7 +30,7 @@ def track_run(
             {"p": pipeline, "m": mode, "s": season},
         ).scalar_one()
 
-    record = RunRecord()
+    record = RunRecord(run_id)
     status, detail = "success", None
     try:
         yield record

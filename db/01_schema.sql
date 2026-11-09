@@ -56,3 +56,20 @@ CREATE TABLE IF NOT EXISTS golf.etl_runs (
 
 CREATE INDEX IF NOT EXISTS ix_etl_runs_lookup
     ON golf.etl_runs (pipeline, season, status);
+
+-- Data-quality check results, one row per check per (run, season). A 'fail'
+-- aborts the load for that season; 'warn' is recorded and surfaced in the UI.
+CREATE TABLE IF NOT EXISTS golf.data_quality_results (
+    result_id  BIGSERIAL PRIMARY KEY,
+    run_id     BIGINT REFERENCES golf.etl_runs (run_id) ON DELETE CASCADE,
+    season     INTEGER,
+    check_name VARCHAR(60) NOT NULL,
+    status     VARCHAR(10) NOT NULL CHECK (status IN ('pass', 'warn', 'fail')),
+    observed   DOUBLE PRECISION,
+    threshold  TEXT,
+    detail     TEXT,
+    checked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS ix_dq_latest
+    ON golf.data_quality_results (season, check_name, checked_at DESC);

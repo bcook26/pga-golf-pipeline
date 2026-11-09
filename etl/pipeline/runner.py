@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import cast
 
 import pandas as pd
 from database.postgres import get_engine
+from database.quality import DataQualityError, load_baseline, save_results
 from database.runs import (
     players_with_stats,
     record_skip,
@@ -18,6 +20,8 @@ from extract.base import GolfDataSource, StatsSource
 from pipeline.players import run_players_pipeline
 from pipeline.stats import run_stats_pipeline
 from pipeline.stats_bulk import BulkStatsSource, run_bulk_stats_pipeline
+from quality.checks import failures, run_quality_checks
+from sqlalchemy import Engine
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +71,32 @@ def select_stat_players(
     return players_df[active_pga | players_df["player_id"].isin(known_stat_ids)]
 
 
+def make_quality_gate(
+    engine: Engine, run_id: int | None, season: int, ignore_failures: bool = False
+) -> Callable[[pd.DataFrame], None]:
+    """Validate a transformed frame; record results; abort on fail-level checks."""
+
+    def gate(stats_df: pd.DataFrame) -> None:
+        results = run_quality_checks(stats_df, load_baseline(engine, season))
+        if run_id is not None:
+            save_results(engine, run_id, season, results)
+        for r in results:
+            level = {
+                "pass": logging.INFO,
+                "warn": logging.WARNING,
+                "fail": logging.ERROR,
+            }[r.status]
+            log.log(
+                level, "DQ %s [%s] season=%s: %s", r.name, r.status, season, r.detail
+            )
+        bad = failures(results)
+        if bad and not ignore_failures:
+            names = ", ".join(r.name for r in bad)
+            raise DataQualityError(f"data-quality checks failed for {season}: {names}")
+
+    return gate
+
+
 def run(
     source: GolfDataSource,
     mode: str = "incremental",
@@ -75,6 +105,7 @@ def run(
     all_players: bool = False,
     max_workers: int = 4,
     stats_source: StatsSource | None = None,
+    ignore_quality_failures: bool = False,
 ) -> RunSummary:
     """``source`` provides the player directory; ``stats_source`` (default:
     ``source``) provides stats. A stats source exposing
@@ -101,9 +132,15 @@ def run(
             reason = "already loaded (use --force to reload)"
         else:
             with track_run(engine, "stats", mode, season) as rec:
+                gate = make_quality_gate(
+                    engine, rec.run_id, season, ignore_quality_failures
+                )
                 if hasattr(stats_source, "fetch_season_stat_details"):
                     rec.rows_loaded = run_bulk_stats_pipeline(
-                        cast(BulkStatsSource, stats_source), season, max_workers
+                        cast(BulkStatsSource, stats_source),
+                        season,
+                        max_workers,
+                        validate=gate,
                     )
                 else:
                     rec.rows_loaded = run_stats_pipeline(
@@ -111,6 +148,7 @@ def run(
                         stat_players,
                         season,
                         max_workers,
+                        validate=gate,
                     )
             summary.seasons_loaded[season] = rec.rows_loaded or 0
             continue

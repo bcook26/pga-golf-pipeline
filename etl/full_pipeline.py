@@ -32,6 +32,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default="graphql",
         help="graphql serves history (needs PGA_GRAPHQL_KEY); pages = current season only",
     )
+    p.add_argument(
+        "--ignore-quality-failures",
+        action="store_true",
+        help="record failing data-quality checks but still load (use with care)",
+    )
     p.add_argument("--max-workers", type=int, default=4)
     return p.parse_args(argv)
 
@@ -57,6 +62,7 @@ def main(argv: list[str] | None = None) -> None:
         force=args.force,
         all_players=args.all_players,
         max_workers=args.max_workers,
+        ignore_quality_failures=args.ignore_quality_failures,
     )
 
     minutes, seconds = divmod(time.perf_counter() - start, 60)
