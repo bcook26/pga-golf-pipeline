@@ -344,7 +344,7 @@ and are off in local docker compose. Behind a reverse proxy set
 `RATE_LIMIT_PROXY_HOPS` so clients are told apart by their real address.
 
 Design notes: the API connects with a read-only transaction (the database
-rejects writes), uses parameterised SQL only (LIKE wildcards in search are
+rejects writes), uses parameterized SQL only (LIKE wildcards in search are
 escaped), validates and caps paging parameters, and allows CORS from
 `CORS_ORIGINS` (default: the Vite and CRA dev servers). Tests seed their own
 rows in a rolled-back transaction, so they never touch real data.
