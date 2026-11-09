@@ -1,9 +1,11 @@
-# Golf ETL Project (In Progress)
+# Golf ETL Project
 
-A data-engineering project that ingests PGA Tour player and season statistics
-into a PostgreSQL warehouse, with incremental loads, season backfills, payload
-caching and an Airflow schedule. A FastAPI backend and React frontend will sit
-on top of the warehouse (not built yet).
+A data-engineering portfolio project. It ingests PGA Tour player, season-stat
+and tournament data into a PostgreSQL warehouse (incremental loads, season
+backfills, payload caching, a data-quality gate, an Airflow schedule) and
+serves it through a rate-limited FastAPI backend and a React + TypeScript
+frontend. It currently runs locally with Docker Compose; notes for deploying
+it to a VPS later are in [Deploying later](#deploying-later-vps-notes).
 
 ## Architecture
 
@@ -24,15 +26,15 @@ flowchart LR
 
 | Layer | Path | Notes |
 | --- | --- | --- |
-| Extract | `etl/extract/` | source protocols (`base.py`); `pgatour_graphql.py` (stats + history) and `pgatour_pages.py` (player directory); `http.py` rate limiter + retries; `cache.py` Redis cache |
+| Extract | `etl/extract/` | source protocols (`base.py`); `pgatour_graphql.py` (season stats, history, tournament schedule and results) and `pgatour_pages.py` (player directory); `http.py` rate limiter + retries; `cache.py` Redis cache |
 | Transform | `etl/transform/` | Normalises players/stats, coerces types, enforces the primary key |
-| Quality | `etl/quality/`, `etl/database/quality.py` | Pure checks on the transformed frame, compared with the previous run; results stored in `golf.data_quality_results` |
+| Quality | `etl/quality/`, `etl/database/quality.py` | Pure checks on the transformed stats frame, compared with the previous run (results stored in `golf.data_quality_results`), plus a champion-vs-results cross-check for tournaments |
 | Load | `etl/load/`, `etl/database/` | Chunked, transactional `INSERT ... ON CONFLICT DO UPDATE` |
-| Orchestration | `etl/pipeline/`, `etl/full_pipeline.py` | `runner.py` plans seasons and records every run |
+| Orchestration | `etl/pipeline/`, `etl/full_pipeline.py` | `runner.py` plans seasons, loads stats then tournaments, and records every run |
 | Scheduling | `airflow/dags/` | Daily incremental DAG + manual backfill DAG |
-| API | `backend/app/` | FastAPI read API over the warehouse |
-| Frontend | `frontend/` | React + TypeScript (Vite) UI: players, trends, leaderboards, compare, stats explorer, pipeline health |
-| Schema | `db/01_schema.sql` | Idempotent DDL, applied automatically by docker compose |
+| API | `backend/app/` | FastAPI read API over the warehouse, with rate limiting (`ratelimit.py`) |
+| Frontend | `frontend/` | React + TypeScript (Vite) UI: players, trends, leaderboards, tournaments, compare, stats explorer, pipeline health |
+| Schema | `db/01_schema.sql` | Idempotent DDL (players, stats, tournaments, results, run log, quality results); applied automatically on the first start of an empty database volume |
 
 ### Design decisions
 
@@ -50,32 +52,76 @@ flowchart LR
 - **Auditability.** `golf.etl_runs` records each run's mode, season, status,
   row count and any skip reason.
 
-## Getting started
+## Components and how to run each
+
+| Component | What it is | Start it | Where |
+| --- | --- | --- | --- |
+| PostgreSQL | the warehouse (`ADHOC_GOLF`, schema `golf`) | `docker compose up -d` | `localhost:5433` |
+| Redis | payload cache for the ETL | `docker compose up -d` | `localhost:6379` |
+| API | FastAPI read API | `docker compose up -d --build` | http://localhost:8000 (docs at `/docs`) |
+| Web UI | React app served by nginx | `docker compose up -d --build` | http://localhost:3000 |
+| ETL | loads players, stats, tournaments | `cd etl && uv run python full_pipeline.py ...` | runs on your machine, writes to Postgres |
+| Airflow | schedules the ETL daily | `docker compose --profile airflow up -d --build` | http://localhost:8080 |
+| Frontend dev server | hot reload while developing the UI | `cd frontend && npm run dev` | http://localhost:5173 |
+
+`docker compose up -d` starts Postgres, Redis, the API and the web UI.
+Airflow is a separate compose *profile* because it needs about 1.5 GB of RAM.
+Everything together uses about 2.1 GB.
+
+### First run (from nothing)
+
+Prerequisites: Docker with Compose v2, [uv](https://docs.astral.sh/uv/) (it
+installs the pinned Python 3.12), and Node 22 only if you want the frontend
+dev server.
 
 ```sh
-cp .env.example .env              # set DB_PASSWORD
-docker compose up -d              # Postgres (host port 5433) + Redis
-# in .env: ETL_DB_PORT=5433, ETL_DB_NAME=ADHOC_GOLF
-
-uv sync --dev      # Python is pinned to 3.12 (.python-version, requires-python)
-source .venv/bin/activate   # or prefix commands with `uv run`
+cp .env.example .env     # set DB_PASSWORD and PGA_GRAPHQL_KEY (see "Data sources")
+docker compose up -d --build     # Postgres, Redis, API, web UI
+uv sync --dev                    # Python 3.12 is pinned (.python-version, requires-python)
 cd etl
-uv run python full_pipeline.py --mode incremental
+uv run python full_pipeline.py --mode backfill   # last 4 seasons: stats + tournaments
 ```
 
-Without Docker, point `ETL_DB_*` (host, port, name, user) at any Postgres and apply `db/01_schema.sql`.
+A cold backfill takes roughly 15-20 minutes (about 400 rate-limited requests
+per season plus ~50 tournaments); re-runs are served from the Redis cache.
+When it finishes, open http://localhost:3000. From then on a daily refresh is
+just `uv run python full_pipeline.py --mode incremental` (or let Airflow do it).
+
+The ETL reads `ETL_DB_*` from `.env`; the defaults (`localhost:5433`,
+database `ADHOC_GOLF`, user `postgres`) match docker compose. Without Docker,
+point them at any Postgres and apply `db/01_schema.sql`.
+
+**Upgrading an existing database.** The schema only runs automatically on an
+empty volume. After pulling changes that add tables, apply it again; it is
+idempotent and safe to repeat:
+
+```sh
+docker compose exec -T postgres psql -U postgres -d ADHOC_GOLF < db/01_schema.sql
+```
+
+**Stopping and resetting.**
+
+```sh
+docker compose down          # stop; data is kept in the pgdata volume
+docker compose down -v       # also delete the warehouse (the schema is re-created on next start)
+docker compose exec redis redis-cli flushall   # drop cached source payloads to force a re-fetch
+```
 
 ### Modes
 
 ```sh
-python full_pipeline.py --mode incremental                       # players + current season
+python full_pipeline.py --mode incremental                       # players + current season (+ its tournaments)
 python full_pipeline.py --mode backfill                          # last 4 seasons
 python full_pipeline.py --mode backfill --seasons 2024 2025 --force
 python full_pipeline.py --mode incremental --stats-source pages  # current season via page data
+python full_pipeline.py --mode incremental --no-tournaments      # stats only
+python full_pipeline.py --mode incremental --ignore-quality-failures  # load despite a failed check
 ```
 
-Completed past seasons are skipped on re-run unless `--force` is passed. The
-current season is always refreshed.
+Run these from `etl/` (prefix with `uv run`). Completed past seasons are
+skipped on re-run unless `--force` is passed. The current season is always
+refreshed. `--force` re-loads from the cache; flush Redis (above) to re-fetch
+from the source.
 
 ### Running the ETL with Airflow
 
@@ -91,12 +137,12 @@ tracked. Everything runs in Docker; no local Airflow install is needed.
 **2. Start the stack**
 
 ```sh
-docker compose --profile airflow up -d --build   # Postgres, Redis, API, Airflow
+docker compose --profile airflow up -d --build   # Postgres, Redis, API, web, Airflow
 docker compose ps                                # wait until postgres/redis are healthy
 ```
 
 The first start builds the image (~2 min) and initializes Airflow's metadata
-database (`airflow` DB in the same Postgres). The warehouse schema in
+database (`airflow` DB in the same Postgres). Airflow uses about 1.5 GB of RAM. The warehouse schema in
 `ADHOC_GOLF` is created automatically on the first start of an empty volume.
 
 **3. Log in**
@@ -112,8 +158,8 @@ docker compose exec airflow cat /opt/airflow/standalone_admin_password.txt
 
 | DAG | Schedule | What it runs |
 | --- | --- | --- |
-| `golf_etl_incremental` | daily 08:00 UTC | `full_pipeline.py --mode incremental` - refresh players + current season |
-| `golf_etl_backfill` | manual only | `full_pipeline.py --mode backfill` - last 4 seasons, or the ones you choose |
+| `golf_etl_incremental` | daily 08:00 UTC | `full_pipeline.py --mode incremental` - refresh players, current-season stats and tournaments |
+| `golf_etl_backfill` | manual only | `full_pipeline.py --mode backfill` - last 4 seasons (stats + tournaments), or the ones you choose |
 
 **5. Run a DAG now**
 
@@ -159,13 +205,15 @@ docker compose --profile airflow down -v     # also delete the database and Airf
 **Notes**
 
 - A cold backfill makes ~400 rate-limited requests per season (~4 minutes
-  each); repeat runs are served from the Redis cache.
+  each) plus ~50 for tournaments; repeat runs are served from the Redis cache.
 - The ETL runs in its own virtualenv inside the image because Airflow 2.x pins
   SQLAlchemy < 2. `airflow standalone` is a dev-only all-in-one runner; a real
   deployment would use separate scheduler/webserver services and a proper
   executor.
 - Unpausing a DAG makes Airflow create a run for the most recent missed
   schedule interval, so expect one immediate run for `golf_etl_incremental`.
+- The Airflow UI (`:8080`) has a generated admin password and is meant for
+  local use only; do not expose it publicly.
 - Retries, alerting and schedules are still defaults to be tuned. If a run
   fails, `golf.etl_runs.detail` holds the error and the task retries twice,
   10 minutes apart.
@@ -228,11 +276,30 @@ Thresholds live in `etl/quality/checks.py`.
 ### Tests and CI
 
 ```sh
-uv run pytest -q && uv run mypy etl backend && uv run black --check . && uv run isort --check-only .
+uv run pytest -q                      # 85 tests; API tests need the compose Postgres (skipped if unreachable)
+uv run mypy etl backend
+uv run black --check . && uv run isort --check-only . && uv run flake8
+cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 ```
 
-GitHub Actions run formatting (black/isort), flake8, mypy + pytest (with a
-Postgres service) and the frontend lint/typecheck/test/build on every push.
+API tests seed their own rows inside a rolled-back transaction, so they never
+touch the real warehouse. GitHub Actions run on every push: `ci.yml` (mypy and
+pytest against a Postgres service, then frontend lint/typecheck/test/build),
+`auto-format.yml` (black, isort) and `linter.yml` (flake8).
+
+### Backup and restore
+
+```sh
+# back up the warehouse (custom format, ~10 MB)
+docker compose exec -T postgres pg_dump -U postgres -d ADHOC_GOLF --schema=golf -Fc --no-owner > golf.dump
+
+# restore into an empty database
+docker compose exec -T postgres psql -U postgres -d postgres -c 'CREATE DATABASE restored'
+docker compose exec -T postgres pg_restore -U postgres -d restored --no-owner < golf.dump
+```
+
+Tested: a restore reproduced all rows. To restore over the live database use
+`pg_restore --clean --if-exists` against `ADHOC_GOLF`.
 
 ## API (FastAPI)
 
@@ -240,7 +307,7 @@ Read-only JSON API over the warehouse for the React/TypeScript frontend.
 
 ```sh
 docker compose up -d --build api                  # http://localhost:8000
-# or locally, from backend/:
+# or locally with auto-reload, from backend/ (reads the same .env; Postgres must be up):
 cd backend && uv run uvicorn app.main:app --reload
 ```
 
@@ -287,7 +354,7 @@ Vite + React 19 + TypeScript SPA in `frontend/`, reading the API above.
 
 ```sh
 docker compose up -d --build web     # http://localhost:3000 (needs the api service)
-# or for development with hot reload:
+# or for development with hot reload (needs the API on :8000):
 cd frontend && npm install && npm run dev      # http://localhost:5173
 ```
 
@@ -341,12 +408,73 @@ Design notes:
 cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 ```
 
+## Deploying later (VPS notes)
+
+Nothing here is implemented in the repo: the project runs locally. These are
+notes from researching a deployment on 2026-11-09, so a future decision does not
+start from zero. **Prices change; re-check before buying.**
+
+**Plan:** one small VPS running the compose stack (including Airflow, so the
+data stays current), served over HTTPS. Managed free tiers (Netlify + Neon +
+Render) were tried and removed: the configs are in git history
+(`git show b0aa7ac --stat`, reverted by `05cb56c`) if they are ever wanted.
+
+**Size.** Measured memory with everything running: Airflow 1.5 GB, Postgres
+0.35 GB, Redis 0.15 GB, API + web 0.07 GB, about 2.1 GB plus the OS, so a
+**4 GB RAM / 2 vCPU** server is needed (2 GB will not fit). The database is
+about 180 MB (a 10 MB compressed dump); any 40 GB+ disk is plenty.
+
+**Prices seen** (verify on the live pages):
+
+| Provider | 4 GB plan | Included traffic | Notes |
+| --- | --- | --- | --- |
+| [DigitalOcean](https://www.digitalocean.com/pricing/droplets) | Basic, 2 vCPU / 4 GB / 80 GB, **$24/month** | 4,000 GiB | overage $0.01/GiB; backups +20% (weekly) or +30% (daily); billed per second, never more than the monthly price; a powered-off droplet still bills, only destroying it stops billing |
+| [Hetzner](https://www.hetzner.com/cloud/cost-optimized/) EU | CX23, 2 vCPU / 4 GB, EUR 5.99 excl. VAT | 20 TB | Germany/Finland only; shown as unavailable when checked |
+| [Hetzner](https://www.hetzner.com/cloud/regular-performance/) US | CPX21 (Ashburn or Hillsboro), 3 vCPU / 4 GB, EUR 32.49 excl. VAT | at least 1 TB | dearer than DigitalOcean; third-party reports say Hetzner raised prices in April and June 2026 |
+
+Neither provider documents shutting a server off when the traffic allowance
+is exceeded; overage is billed per TB. Cancelling is free on both (no
+contract), but you must destroy the server. A domain name is optional (about
+$10-15 a year); the site can be reached by IP.
+
+**Traffic ceiling.** Measured API responses are 0.2-114 KB (most 3-17 KB). At
+the global rate limit (3000 requests/hour) that is about 35 GB/month typical
+and about 250 GB/month in the worst case, far below either allowance. The
+static site is *not* covered by the API limiter, so add a request limit at the
+reverse proxy.
+
+**Checklist for a real deployment** (none of this exists yet):
+
+1. Create an Ubuntu LTS server, add your SSH key, use a non-root user, and open
+   only ports 22, 80 and 443 (`ufw`).
+2. Install Docker, clone the repo, create `.env` with a strong `DB_PASSWORD`
+   and `PGA_GRAPHQL_KEY`.
+3. Production compose changes: do **not** publish Postgres (5433), Redis (6379)
+   or Airflow (8080) beyond localhost (reach Airflow with
+   `ssh -L 8080:localhost:8080 user@server`); add a reverse proxy such as Caddy
+   for automatic HTTPS and request limits; add `restart: unless-stopped`;
+   build the web image with `PUBLIC_API_URL` set to the public API URL and set
+   `CORS_ORIGINS` to the site origin.
+4. Turn rate limiting **on**: compose defaults `RATE_LIMIT_*` to `0` (off) for
+   local use, so set `RATE_LIMIT_PER_MINUTE=60`, `RATE_LIMIT_PER_HOUR=600`,
+   `RATE_LIMIT_GLOBAL_PER_HOUR=3000` and `RATE_LIMIT_PROXY_HOPS=1` (one proxy in
+   front). Verify the hop count: hammer the API, then check the `rate limit
+   ... hit by <address>` log line shows your real IP, not the proxy's.
+5. Load data: run the backfill on the server (about 15-20 minutes), or restore a
+   dump made with the commands in [Backup and restore](#backup-and-restore).
+6. Unpause the Airflow DAG and schedule `pg_dump` backups (plus the provider's
+   backup option).
+7. Terms: the site republishes PGA Tour data from undocumented endpoints. The UI
+   footer already says it is unofficial and unaffiliated; review the PGA Tour's
+   terms before sharing it publicly, and keep "PGA" out of any domain name.
+
 ## Data sources
 
 | Source | Class | Serves | Used for |
 | --- | --- | --- | --- |
 | Page data (`__NEXT_DATA__`) | `PGATourPageSource` | current season | player directory; `--stats-source pages` |
 | PGA Tour GraphQL `StatDetails` | `PGATourGraphQLSource` | current + history (2004+) | season stats (default) |
+| PGA Tour GraphQL `schedule`, `tournamentPastResults` | `PGATourGraphQLSource` | current + history | tournaments and per-player results |
 
 The GraphQL source fetches one whole-season leaderboard per stat (~400 stats
 per season, all players at once) instead of one request per player. Rows map
@@ -367,6 +495,10 @@ website ships to browsers; never commit it.
 - Leaderboards only include players ranked in each stat, so a player's
   `player_stats` rows exist only for seasons where they qualified.
 - `above_or_below` is not provided by the GraphQL source (NULL for those rows).
+- Team and match-play events (Zurich Classic, Ryder Cup, Presidents Cup) have
+  no player leaderboard; they are stored without results and hidden by the API.
+- Airflow runs in `standalone` mode (scheduler + web server in one process),
+  which is a dev-oriented setup.
 
 ## Roadmap
 
@@ -376,7 +508,9 @@ website ships to browsers; never commit it.
 - [x] Data-quality gate in the pipeline
 - [x] Tournament schedule + results (ETL)
 - [x] Tournament API endpoints and UI (list, results, player history)
+- [x] API rate limiting
 - [ ] Per-tournament stats (`StatDetails` `eventQuery`, `EVENT_ONLY` / `THROUGH_EVENT`)
 - [ ] Frontend: course pages
 - [ ] Course statistics
+- [ ] Production deployment on a single VPS (see below)
 - [ ] Dependabot, integration tests against a Postgres service container
