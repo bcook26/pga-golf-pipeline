@@ -249,6 +249,7 @@ types): http://localhost:8000/docs and `/openapi.json`.
 
 | Endpoint | Purpose |
 | --- | --- |
+| `GET /live` | process liveness only (no database), for platform health checks |
 | `GET /health` | liveness + database check |
 | `GET /api/v1/seasons` | seasons loaded, with player/stat/row counts |
 | `GET /api/v1/players` | search/filter players (`search`, `country`, `active`, `has_stats`, `season`, `limit`, `offset`) |
@@ -333,6 +334,14 @@ Design notes:
 ```sh
 cd frontend && npm run lint && npm run typecheck && npm test && npm run build
 ```
+
+## Deploying
+
+A free, public deployment (Netlify frontend, Render API, Neon Postgres, GitHub
+Actions for the daily ETL) is described in [docs/DEPLOY.md](docs/DEPLOY.md).
+The API is rate limited (per client per minute and hour, plus a global hourly
+cap that protects the free-tier budgets); limits are environment variables and
+are off in local docker compose.
 
 ## Data sources
 

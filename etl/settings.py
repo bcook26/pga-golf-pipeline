@@ -28,6 +28,8 @@ class Settings:
     db_host: str
     db_port: int
     db_name: str
+    database_url: str | None  # e.g. Neon; overrides the parts above
+    db_sslmode: str | None
     # Redis payload cache
     redis_url: str
     cache_ttl_seconds: int
@@ -53,6 +55,8 @@ def get_settings() -> Settings:
         db_host=os.getenv("ETL_DB_HOST", "localhost"),
         db_port=_env_int("ETL_DB_PORT", 5433),
         db_name=os.getenv("ETL_DB_NAME", "ADHOC_GOLF"),
+        database_url=os.getenv("DATABASE_URL") or None,
+        db_sslmode=os.getenv("ETL_DB_SSLMODE") or None,
         redis_url=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
         cache_ttl_seconds=_env_int("CACHE_TTL_SECONDS", 6 * 3600),
         current_season_ttl_seconds=_env_int("CURRENT_SEASON_TTL_SECONDS", 3600),
