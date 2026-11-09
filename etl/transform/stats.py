@@ -1,5 +1,20 @@
 import pandas as pd
 
+STATS_COLUMNS = [
+    "player_id",
+    "player_name",
+    "season",
+    "stat_id",
+    "stat_name",
+    "stat_value",
+    "rank",
+    "category",
+    "above_or_below",
+    "field_average",
+    "supporting_stat",
+    "supporting_value",
+]
+
 
 def normalize_category(category) -> str | None:
 
@@ -18,7 +33,7 @@ def transform_stats(
 ) -> pd.DataFrame:
 
     if extracted_stats.empty:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=STATS_COLUMNS)
 
     rows = []
 
@@ -33,13 +48,9 @@ def transform_stats(
 
         for stat in stats_data.get("stats", []):
 
-            supporting_stat = stat.get(
-                "supportingStat"
-            )
+            supporting_stat = stat.get("supportingStat")
 
-            supporting_value = stat.get(
-                "supportingValue"
-            )
+            supporting_value = stat.get("supportingValue")
 
             rows.append(
                 {
@@ -50,15 +61,9 @@ def transform_stats(
                     "stat_name": stat.get("title"),
                     "stat_value": stat.get("value"),
                     "rank": stat.get("rank"),
-                    "category": normalize_category(
-                        stat.get("category")
-                    ),
-                    "above_or_below": stat.get(
-                        "aboveOrBelow"
-                    ),
-                    "field_average": stat.get(
-                        "fieldAverage"
-                    ),
+                    "category": normalize_category(stat.get("category")),
+                    "above_or_below": stat.get("aboveOrBelow"),
+                    "field_average": stat.get("fieldAverage"),
                     "supporting_stat": (
                         supporting_stat.get("value")
                         if isinstance(
@@ -78,20 +83,25 @@ def transform_stats(
                 }
             )
 
-    return pd.DataFrame(
-        rows,
-        columns=[
-            "player_id",
-            "player_name",
-            "season",
-            "stat_id",
-            "stat_name",
-            "stat_value",
-            "rank",
-            "category",
-            "above_or_below",
-            "field_average",
-            "supporting_stat",
-            "supporting_value",
-        ],
-    )
+    df = pd.DataFrame(rows, columns=STATS_COLUMNS)
+    return clean_stats_frame(df)
+
+
+def clean_stats_frame(df: pd.DataFrame) -> pd.DataFrame:
+    """Coerce types and enforce the (player_id, season, stat_id) key.
+
+    - non-numeric values (e.g. "-") become NULL instead of failing the load
+    - rank becomes a nullable integer
+    - rows without a stat_id are dropped; duplicate keys keep the last row
+    """
+    df = df.copy()
+    for col in ("stat_value", "field_average"):
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df["rank"] = pd.to_numeric(df["rank"], errors="coerce").astype("Int64")
+    for col in ("supporting_stat", "supporting_value"):
+        df[col] = df[col].astype("string")
+
+    df = df.dropna(subset=["stat_id"])
+    return df.drop_duplicates(
+        subset=["player_id", "season", "stat_id"], keep="last"
+    ).reset_index(drop=True)

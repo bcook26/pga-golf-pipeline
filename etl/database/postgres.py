@@ -1,146 +1,94 @@
+"""Generic, idempotent upserts into the golf schema."""
+
+from __future__ import annotations
+
+import logging
+from functools import lru_cache
+from typing import Any
+
+import numpy as np
 import pandas as pd
-from sqlalchemy.dialects.postgresql import insert
-
-from database.connection import engine
+from database.connection import engine as make_engine
 from database.tables import tables
+from sqlalchemy import Table
+from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.engine import Engine
 
-sql_engine = engine()
-
-players_table, player_stats_table, stats_reference_table = tables(sql_engine)
+log = logging.getLogger(__name__)
 
 
-# -------------------------
-# Players UPSERT
-# -------------------------
+@lru_cache(maxsize=1)
+def get_engine() -> Engine:
+    return make_engine()
 
-def upsert_players(
+
+@lru_cache(maxsize=1)
+def get_tables() -> tuple[Table, Table, Table]:
+    return tables(get_engine())
+
+
+def to_records(df: pd.DataFrame) -> list[dict[str, Any]]:
+    """DataFrame -> list of dicts with NaN/NaT/pd.NA converted to None.
+
+    psycopg would otherwise send float NaN, which Postgres rejects for
+    INTEGER columns (e.g. ``rank``).
+    """
+    cleaned = df.astype(object).where(df.notna(), None)
+    return [
+        {str(k): (v.item() if isinstance(v, np.generic) else v) for k, v in row.items()}
+        for row in cleaned.to_dict(orient="records")
+    ]
+
+
+def upsert_dataframe(
     df: pd.DataFrame,
-) -> None:
-
-    if df.empty:
-        print("No player data to load.")
-        return
-
-    records = df.to_dict(
-        orient="records",
-    )
-
-    stmt = insert(
-        players_table,
-    ).values(records)
-
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["player_id"],
-        set_={
-            "display_name": stmt.excluded.display_name,
-            "is_active": stmt.excluded.is_active,
-            "country": stmt.excluded.country,
-            "player_bio": stmt.excluded.player_bio,
-            "primary_tour": stmt.excluded.primary_tour,
-        },
-    )
-
-    with sql_engine.begin() as conn:
-        conn.execute(stmt)
-
-    print(
-        f"Upserted {len(df)} players."
-    )
-
-
-# -------------------------
-# Player Stats UPSERT
-# -------------------------
-
-def upsert_player_stats(
-    df: pd.DataFrame,
+    table: Table,
+    key_columns: list[str],
     chunksize: int = 1000,
-) -> None:
+    engine: Engine | None = None,
+) -> int:
+    """Upsert ``df`` into ``table`` on ``key_columns``; returns rows sent.
 
+    All chunks run in one transaction, so a failure leaves the table
+    untouched. Non-key columns present in ``df`` are updated on conflict.
+    """
     if df.empty:
-        print("No player stats to load.")
-        return
+        return 0
 
-    total_rows = len(df)
+    dupes = df.duplicated(subset=key_columns, keep=False)
+    if dupes.any():
+        raise ValueError(
+            f"{int(dupes.sum())} duplicate key rows for {key_columns} "
+            f"in {table.name}; deduplicate before loading"
+        )
 
-    with sql_engine.begin() as conn:
+    update_cols = [c for c in df.columns if c not in key_columns]
+    records = to_records(df)
+    eng = engine or get_engine()
 
-        for start in range(
-            0,
-            total_rows,
-            chunksize,
-        ):
-
-            chunk = df.iloc[
-                start:start + chunksize
-            ]
-
-            records = chunk.to_dict(
-                orient="records",
-            )
-
-            stmt = insert(
-                player_stats_table,
-            ).values(records)
-
+    with eng.begin() as conn:
+        for start in range(0, len(records), chunksize):
+            stmt = insert(table).values(records[start : start + chunksize])
             stmt = stmt.on_conflict_do_update(
-                index_elements=[
-                    "player_id",
-                    "season",
-                    "stat_id",
-                ],
-                set_={
-                    "player_name": stmt.excluded.player_name,
-                    "stat_name": stmt.excluded.stat_name,
-                    "stat_value": stmt.excluded.stat_value,
-                    "rank": stmt.excluded.rank,
-                    "category": stmt.excluded.category,
-                    "above_or_below": stmt.excluded.above_or_below,
-                    "field_average": stmt.excluded.field_average,
-                    "supporting_stat": stmt.excluded.supporting_stat,
-                    "supporting_value": stmt.excluded.supporting_value,
-                },
+                index_elements=key_columns,
+                set_={c: stmt.excluded[c] for c in update_cols},
             )
-
             conn.execute(stmt)
 
-            print(
-                f"Upserted "
-                f"{min(start + chunksize, total_rows)} "
-                f"of {total_rows} stat rows."
-            )
+    log.info("Upserted %d rows into %s", len(records), table.name)
+    return len(records)
 
 
-# -------------------------
-# Stats Reference UPSERT
-# -------------------------
+def upsert_players(df: pd.DataFrame) -> int:
+    players, _, _ = get_tables()
+    return upsert_dataframe(df, players, ["player_id"])
 
-def upsert_stats_reference(
-    df: pd.DataFrame,
-) -> None:
 
-    if df.empty:
-        print("No stats reference data to load.")
-        return
+def upsert_player_stats(df: pd.DataFrame) -> int:
+    _, stats, _ = get_tables()
+    return upsert_dataframe(df, stats, ["player_id", "season", "stat_id"])
 
-    records = df.to_dict(
-        orient="records",
-    )
 
-    stmt = insert(
-        stats_reference_table,
-    ).values(records)
-
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["stat_id"],
-        set_={
-            "stat_name": stmt.excluded.stat_name,
-        },
-    )
-
-    with sql_engine.begin() as conn:
-        conn.execute(stmt)
-
-    print(
-        f"Upserted {len(df)} stat reference records."
-    )
+def upsert_stats_reference(df: pd.DataFrame) -> int:
+    _, _, reference = get_tables()
+    return upsert_dataframe(df, reference, ["stat_id"])

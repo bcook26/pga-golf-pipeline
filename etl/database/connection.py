@@ -1,16 +1,16 @@
-from sqlalchemy.engine import create_engine
-from dotenv import load_dotenv
-import os
+from settings import get_settings
+from sqlalchemy.engine import URL, Engine, create_engine
 
-load_dotenv()
 
-def engine():
-    DATABASE_URL = (
-        f"postgresql+psycopg://postgres:{os.getenv('DB_PASSWORD')}"
-        "@localhost:5432/pga_golf_etl"
+def engine() -> Engine:
+    """Build a SQLAlchemy engine from environment settings."""
+    s = get_settings()
+    url = URL.create(
+        "postgresql+psycopg",
+        username=s.db_user,
+        password=s.db_password,
+        host=s.db_host,
+        port=s.db_port,
+        database=s.db_name,
     )
-    try:
-        engine = create_engine(DATABASE_URL)
-    except Exception as e:
-        print(f"Error connecting to postgres instance: {e}")
-    return engine
+    return create_engine(url, pool_pre_ping=True)

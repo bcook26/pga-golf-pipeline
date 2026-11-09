@@ -11,6 +11,7 @@ dependencies = [
     "sqlalchemy>=2.0.52",
     "python-dotenv>=1.2.3",
     "psycopg[binary]>=3.3.4",
+    "redis>=8.1.0",
 ]
 
 [tool.black]
@@ -36,3 +37,25 @@ use_parentheses = true
 ensure_newline_before_comments = true
 known_first_party = ["golf-etl-fast-api"]
 skip_gitignore = true
+
+[dependency-groups]
+dev = [
+    "black>=26.10.1",
+    "flake8>=7.5.0",
+    "isort>=9.0.2",
+    "mypy>=2.4.1",
+    "pandas-stubs>=3.1.0.261029",
+    "pytest>=9.2.0",
+    "types-beautifulsoup4>=4.12.0.20250516",
+    "types-requests>=2.33.0.20261030",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["etl"]
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "etl"
+explicit_package_bases = true
+ignore_missing_imports = true

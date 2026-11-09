@@ -1,7 +1,6 @@
 import json
 
 import pandas as pd
-
 from extract.config import PLAYER_DROP_COLS, TOUR_MAPPING
 from transform.helper import clean_string_column
 
@@ -56,9 +55,7 @@ def player_transformation(df: pd.DataFrame) -> pd.DataFrame:
 
     # Convert dictionaries to JSON strings
     df["playerBio"] = df["playerBio"].apply(
-        lambda x: json.dumps(x)
-        if isinstance(x, dict)
-        else x
+        lambda x: json.dumps(x) if isinstance(x, dict) else x
     )
 
     # Rename to database schema

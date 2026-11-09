@@ -1,30 +1,56 @@
+"""CLI entry point.
+
+python full_pipeline.py --mode incremental
+python full_pipeline.py --mode backfill                 # last 4 seasons
+python full_pipeline.py --mode backfill --seasons 2023 2024 --force
+"""
+
+from __future__ import annotations
+
+import argparse
+import logging
 import time
 
-from pipeline.players import run_players_pipeline
-from pipeline.stats import run_stats_pipeline
+from extract.pgatour_pages import PGATourPageSource
+from pipeline.runner import run
 
 
-def main():
-    YEAR = 2026
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser(description="PGA Tour ETL")
+    p.add_argument("--mode", choices=["incremental", "backfill"], default="incremental")
+    p.add_argument("--seasons", type=int, nargs="+", help="backfill: explicit seasons")
+    p.add_argument("--force", action="store_true", help="reload already-loaded seasons")
+    p.add_argument(
+        "--all-players",
+        action="store_true",
+        help="fetch stats for every player, not just active PGA Tour players",
+    )
+    p.add_argument("--max-workers", type=int, default=4)
+    return p.parse_args(argv)
 
-    pipeline_start = time.perf_counter()
 
-    players_df = run_players_pipeline()
+def main(argv: list[str] | None = None) -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
+    )
+    args = parse_args(argv)
+    start = time.perf_counter()
 
-    run_stats_pipeline(
-        players_df,
-        year=YEAR,
-        max_workers=10,
+    source = PGATourPageSource.from_settings()
+    summary = run(
+        source,
+        mode=args.mode,
+        seasons=args.seasons,
+        force=args.force,
+        all_players=args.all_players,
+        max_workers=args.max_workers,
     )
 
-    pipeline_end = time.perf_counter()
-
-    total_run_time = pipeline_end - pipeline_start
-    minutes, seconds = divmod(total_run_time, 60)
-
+    minutes, seconds = divmod(time.perf_counter() - start, 60)
     print(
-        f"Total pipeline runtime for {YEAR}: "
-        f"{int(minutes)}m {seconds:.2f}s"
+        f"Done in {int(minutes)}m {seconds:.1f}s | loaded={summary.seasons_loaded} "
+        f"skipped={summary.seasons_skipped} | cache hits={source.cache.hits} "
+        f"misses={source.cache.misses}"
     )
 
 

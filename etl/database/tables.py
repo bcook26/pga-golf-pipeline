@@ -1,5 +1,6 @@
 from sqlalchemy import MetaData
 
+
 def tables(engine):
     "return metadata for players and player stats table in tuple form (player, player_stats)"
     metadata = MetaData()

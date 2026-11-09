@@ -1,72 +1,108 @@
 # Golf ETL Project (In Progress)
 
-This project uses FastAPI to create an interface for interacting with different kinds of golf statistics and good to know facts
+A data-engineering project that ingests PGA Tour player and season statistics
+into a PostgreSQL warehouse, with incremental loads, season backfills, payload
+caching and an Airflow schedule. A FastAPI backend and React frontend will sit
+on top of the warehouse (not built yet).
 
+## Architecture
 
-## Basics of getting started Claude
-- I want to build out a full stack application that I can use to track player and course statistics
-- data will be ingested from the PGA tour site = "https://www.pgatour.com/" and should follow any security/API guidelines they have in place
-- The backend is somewhat put together in PostgreSQL, the API interaction is happening in Python, the frontend should be built in React and fastAPI backend should handle requests from users
-- I need to create an airflow job so that I can regularly run ETL to update any player information
-- The project should use actions for code formatting, linting, type checking etc. 
-- Currently I've only got the ETL portion going which loads players/stats into postgres. 
+```mermaid
+flowchart LR
+    SRC["GolfDataSource<br/>(swappable extractor)"] -->|rate-limited + retried HTTP| CACHE[(Redis payload cache)]
+    CACHE --> EX[extract]
+    EX --> TR[transform<br/>coerce types, dedupe keys]
+    TR --> LD[load<br/>idempotent upserts]
+    LD --> PG[(PostgreSQL<br/>golf schema)]
+    AF[Airflow DAGs] -->|full_pipeline.py| EX
+    LD --> AUDIT[golf.etl_runs audit log]
+```
 
-# Stopped working on pipeline/orchestration (upsert merge failure due to schema change during refactor)
+| Layer | Path | Notes |
+| --- | --- | --- |
+| Extract | `etl/extract/` | `GolfDataSource` protocol (`base.py`); `pgatour_pages.py` is the current implementation; `http.py` rate limiter + retries; `cache.py` Redis cache |
+| Transform | `etl/transform/` | Normalises players/stats, coerces types, enforces the primary key |
+| Load | `etl/load/`, `etl/database/` | Chunked, transactional `INSERT ... ON CONFLICT DO UPDATE` |
+| Orchestration | `etl/pipeline/`, `etl/full_pipeline.py` | `runner.py` plans seasons and records every run |
+| Scheduling | `airflow/dags/` | Daily incremental DAG + manual backfill DAG (scaffold) |
+| Schema | `db/01_schema.sql` | Idempotent DDL, applied automatically by docker compose |
 
----
+### Design decisions
 
-## Table of Contents
+- **Swappable extractor.** The pipeline depends only on the `GolfDataSource`
+  protocol. Moving to another provider means writing one class.
+- **Polite scraping.** Global token-spacing rate limiter (`REQUESTS_PER_SECOND`),
+  exponential-backoff retries on 429/5xx honouring `Retry-After`, an
+  identifying User-Agent, and `robots.txt` respected (player and stats pages
+  are not disallowed).
+- **Redis payload cache.** Parsed payloads are cached (including "no stats"
+  results), so re-runs and backfills don't re-hit the source. If Redis is down
+  the pipeline logs a warning and runs uncached.
+- **Idempotent loads.** Upserts keyed on `(player_id, season, stat_id)`; all
+  chunks of a load run in one transaction; duplicate keys are rejected up front.
+- **Auditability.** `golf.etl_runs` records each run's mode, season, status,
+  row count and any skip reason.
 
-- [Features](#features)
-- [Usage](#usage)
-    - [Initial Setup](#initial-setup)
-- [Projects Using This Template](#projects-using-this-template)
-- [FAQ](#faq)
-- [Contributing](#contributing)
+## Getting started
 
----
+```sh
+cp .env.example .env              # set DB_PASSWORD
+docker compose up -d              # Postgres (host port 5433) + Redis
+# in .env: ETL_DB_PORT=5433
 
-## Features
+uv sync --dev
+cd etl
+uv run python full_pipeline.py --mode incremental
+```
 
-- **Robust CI with [GitHub Actions](https://github.com/features/actions):**
-    - Unit tests with [PyTest](https://docs.pytest.org) across multiple Python versions (Still in Progress)
-    - Type checking via [mypy](https://github.com/python/mypy)
-    - Linting with [flake8](https://flake8.pycqa.org/en/latest/)
-    - Package Sorting and formatting using [isort](https://pycqa.github.io/isort/) and [black](https://black.readthedocs.io/en/stable/)
-- **Automated Dependency Updates: (Not Working yet)**  
-    [Dependabot](https://github.blog/2020-06-01-keep-all-your-packages-up-to-date-with-dependabot/) configuration included
-- **API Documentation:**  
-    Built with [FastAPI](https://fastapi.tiangolo.com/)
+Without Docker, point `ETL_DB_*` at any Postgres and apply `db/01_schema.sql`.
 
----
+### Modes
 
-## Usage
+```sh
+python full_pipeline.py --mode incremental                       # players + current season
+python full_pipeline.py --mode backfill                          # last 4 seasons
+python full_pipeline.py --mode backfill --seasons 2024 2025 --force
+python full_pipeline.py --mode incremental --all-players         # not just active PGA Tour players
+```
 
-### Initial Setup
+Completed past seasons are skipped on re-run unless `--force` is passed. The
+current season is always refreshed.
 
-1. **Create a new repository/fork**  
+### Airflow (scaffold)
 
-2. **Set up a Python 3.8+ virtual environment**
+```sh
+docker compose --profile airflow up -d --build   # UI on http://localhost:8080
+```
 
-    - Using [`venv`](https://docs.python.org/3/library/venv.html) (built-in):
+`golf_etl_incremental` runs daily; `golf_etl_backfill` is triggered manually
+with optional `seasons` / `force` params. The ETL runs in its own virtualenv
+inside the image because Airflow 2.x pins SQLAlchemy < 2. The compose and DAG
+files have not yet been exercised end-to-end.
 
-        ```sh
-        python3 -m venv .venv
-        source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
-        ```
+### Quality checks
 
-    - Or with [`uv`](https://github.com/astral-sh/uv) (fast alternative):
+```sh
+uv run pytest -q && uv run mypy etl && uv run black --check . && uv run isort --check-only .
+```
 
-        ```sh
-        uv venv .venv
-        source .venv/bin/activate  # On Windows use: .venv\Scripts\activate
-        ```
+GitHub Actions run formatting (black/isort), flake8, and mypy + pytest on every push.
 
-3. **Personalize the repository**
+## Known limitations
 
-     ```sh
-     pip install -r requirements.txt
-     ```
+- **No historical seasons from the current source.** pgatour.com server-renders
+  only the *current* season (`?season=`/`?year=` are ignored; past seasons load
+  client-side). `backfill` therefore records past seasons as `skipped` until a
+  source that serves history is plugged in (e.g. a licensed provider). History
+  accumulates going forward through incremental runs.
+- The extractor reads the site's embedded Next.js page data, which is not a
+  documented API and can change without notice. Keep request rates low and
+  review pgatour.com's terms of use before any non-personal use.
 
-4. **Commit and push your changes**  
-     Ensure all GitHub Actions jobs pass.
+## Roadmap
+
+- [ ] Historical source for backfill
+- [ ] FastAPI service over the warehouse
+- [ ] React frontend
+- [ ] Course statistics
+- [ ] Dependabot, integration tests against a Postgres service container

@@ -5,6 +5,9 @@ def transform_stats_reference(
     stats_df: pd.DataFrame,
 ) -> pd.DataFrame:
 
+    if stats_df.empty:
+        return pd.DataFrame(columns=["stat_id", "stat_name"])
+
     reference_df = (
         stats_df[
             [
@@ -29,19 +32,14 @@ def transform_stats_reference(
 
     return reference_df
 
+
 def validate_stats_reference(
     stats_df: pd.DataFrame,
 ) -> None:
 
-    conflicts = (
-        stats_df
-        .groupby("stat_id")["stat_name"]
-        .nunique()
-        .loc[lambda x: x > 1]
-    )
+    conflicts = stats_df.groupby("stat_id")["stat_name"].nunique().loc[lambda x: x > 1]
 
     if not conflicts.empty:
         raise ValueError(
-            "Found stat_ids with multiple stat_names: "
-            f"{conflicts.index.tolist()}"
+            "Found stat_ids with multiple stat_names: " f"{conflicts.index.tolist()}"
         )
